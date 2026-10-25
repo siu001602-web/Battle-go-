@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (각 능력별 별 5개 만렙 달성 이후부터 수호의 조각 전환 규칙 적용)
+# 단일 뽑기 로직 (5성 만렙 달성 이후 중복 시 수호의 조각 변환)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -87,7 +87,6 @@ def roll_single_item():
     
     if name in st.session_state.abilities:
         is_duplicate = True
-        # 별(★)이 5개(만렙) 이상인지 확인
         if st.session_state.abilities[name]["stars"] >= 5:
             if tier == "3성":
                 shard_gained_msg = "3성 만렙 달성 상태이므로 조각이 사라집니다."
@@ -98,7 +97,6 @@ def roll_single_item():
                 st.session_state.guardian_shards += 100
                 shard_gained_msg = "5성 만렙 중복! 수호의 조각 +100개 전환!"
         else:
-            # 만렙(5성) 미만일 때는 개별 조각 획득
             st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
             shard_gained_msg = f"[{name}] 개별 승급 조각 +1개 획득!"
     else:
@@ -146,8 +144,6 @@ with tab_gacha:
     * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 & 🌟 노란색 별 반짝임 컷씬)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 & 💜 보라색 별 반짝임 컷씬)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
-    * ⚔️ **검투사 성급별 필살기 데미지 2배 확률**:
-      - **1성**: 55% | **2성**: 60% | **3성**: 65% | **4성**: 70% | **5성**: 75%
     * 🔄 **중복 획득 시 보상 규칙**:
       - **5성 만렙 달성 전**: 각 능력별 개별 승급 조각 `+1개` 획득
       - **5성 만렙 달성 후**: 3성은 그냥 사라짐 / 4성은 수호의 조각 `+10개` / 5성은 수호의 조각 `+100개` 전환!
