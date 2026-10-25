@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (5성 만렙 달성 이후 중복 시 수호의 조각 변환)
+# 단일 뽑기 로직 (5성 만렙 달성 후 중복 시 수호의 조각 변환)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -295,8 +295,9 @@ with tab_char:
         st.write("보유한 능력이 없습니다. 뽑기샵에서 능력을 획득해 보세요!")
 
     st.divider()
-    st.subheader("🏪 수호의 조각 교환 상점")
-    st.write("모은 수호의 조각으로 다이아를 교환하거나 원하는 5성 능력을 선택하세요!")
+    st.subheader("🏪 수호의 조각 거래소 (상점)")
+    st.write(f"현재 보유한 수호의 조각: **🛡️ {st.session_state.guardian_shards}개**")
+    st.write("수호의 조각을 소모하여 다이아로 교환하거나, 원하는 능력의 승급 조각으로 바로 교환하세요!")
     
     s_col1, s_col2 = st.columns(2)
     with s_col1:
@@ -334,6 +335,37 @@ with tab_char:
                 st.rerun()
             else:
                 st.error("수호의 조각이 부족합니다! (필요: 300개)")
+
+    # 새로 추가된 개별 능력 조각 교환 거래소
+    st.markdown("#### 🔄 개별 능력 승급 조각 교환소")
+    st.write("수호의 조각 5개 ⇄ 원하는 능력의 개별 승급 조각 1개")
+    
+    # 모든 능력 리스트 합치기
+    all_abilities_flat = []
+    for tier_list in ABILITIES_POOL.values():
+        all_abilities_flat.extend(tier_list)
+        
+    target_ability_to_buy = st.selectbox("조각을 교환할 능력을 선택하세요", all_abilities_flat, key="shard_exchange_select")
+    if st.button("수호의 조각으로 개별 조각 교환 (필요: 5개)"):
+        if st.session_state.guardian_shards >= 5:
+            st.session_state.guardian_shards -= 5
+            # 해당 능력이 인벤토리에 없으면 자동으로 등록(별 0개) 해줌
+            if target_ability_to_buy not in st.session_state.abilities:
+                # 등급 찾기
+                t_tier = "3성"
+                for t, lst in ABILITIES_POOL.items():
+                    if target_ability_to_buy in lst:
+                        t_tier = t
+                        break
+                st.session_state.abilities[target_ability_to_buy] = {"tier": t_tier, "stars": 0}
+                if target_ability_to_buy not in st.session_state.ability_shards:
+                    st.session_state.ability_shards[target_ability_to_buy] = 0
+            
+            st.session_state.ability_shards[target_ability_to_buy] = st.session_state.ability_shards.get(target_ability_to_buy, 0) + 1
+            st.success(f"✨ 성공! [{target_ability_to_buy}] 개별 승급 조각 +1개를 획득했습니다!")
+            st.rerun()
+        else:
+            st.error("수호의 조각이 부족합니다! (필요: 5개)")
 
     st.divider()
     st.subheader("🔑 비밀 제작자 코드 시스템")
