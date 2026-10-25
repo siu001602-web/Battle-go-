@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import json
 
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
@@ -86,7 +87,6 @@ def roll_single_item():
     
     if name in st.session_state.abilities:
         is_duplicate = True
-        # 이미 보유 중인 경우, 5성 만렙(별 5개)인지 확인
         if st.session_state.abilities[name]["stars"] >= 5:
             if tier == "3성":
                 shard_gained_msg = "3성 만렙 달성 상태이므로 추가 조각이 지급되지 않습니다."
@@ -97,7 +97,6 @@ def roll_single_item():
                 st.session_state.guardian_shards += 100
                 shard_gained_msg = "5성 만렙 중복! 수호의 조각 +100개 반환!"
         else:
-            # 5성 만렙이 아니면 기존대로 개별 승급 조각 +1개 획득
             if tier == "3성":
                 shard_gained_msg = "3성은 이미 보유 중이라 추가 조각이 지급되지 않습니다."
             else:
@@ -326,6 +325,55 @@ with tab_char:
                 st.rerun()
             else:
                 st.error("수호의 조각이 부족합니다! (필요: 300개)")
+
+    st.divider()
+    st.subheader("🔑 비밀 제작자 코드 시스템")
+    st.write("제작자 코드를 입력하여 보석을 획득하세요.")
+    creator_code_input = st.text_input("제작자 코드를 입력하세요", type="password")
+    if st.button("코드 제출 및 보상 수령"):
+        # 비밀 제작자 코드 ("admin1234" 입력 시 보석 5000개 지급 - 원하시는 대로 변경 가능)
+        if creator_code_input == "admin1234":
+            st.session_state.gems += 5000
+            st.success("🎉 [제작자 인증 성공!] 보석 5,000개가 지급되었습니다!")
+            st.rerun()
+        else:
+            st.error("❌ 올바르지 않은 제작자 코드입니다.")
+
+    st.divider()
+    st.subheader("💾 게임 기록 저장 및 복구 (업데이트 대비 백업)")
+    st.write("앱 업데이트나 브라우저 초기화 대비 내 게임 데이터를 백업하고 불러올 수 있습니다.")
+
+    # 백업 데이터 만들기 (JSON 직렬화)
+    game_data = {
+        "gems": st.session_state.gems,
+        "guardian_shards": st.session_state.guardian_shards,
+        "abilities": st.session_state.abilities,
+        "ability_shards": st.session_state.ability_shards,
+        "equipped_ability": st.session_state.equipped_ability
+    }
+    json_str = json.dumps(game_data, ensure_ascii=False, indent=4)
+
+    st.download_button(
+        label="📥 내 게임 기록 백업하기 (JSON 다운로드)",
+        data=json_str,
+        file_name="my_game_save.json",
+        mime="application/json"
+    )
+
+    # 업로드(불러오기) 기능
+    uploaded_file = st.file_uploader("📤 백업한 게임 기록 파일 불러오기", type=["json"])
+    if uploaded_file is not None:
+        try:
+            loaded_data = json.load(uploaded_file)
+            st.session_state.gems = loaded_data.get("gems", 0)
+            st.session_state.guardian_shards = loaded_data.get("guardian_shards", 0)
+            st.session_state.abilities = loaded_data.get("abilities", {})
+            st.session_state.ability_shards = loaded_data.get("ability_shards", {})
+            st.session_state.equipped_ability = loaded_data.get("equipped_ability", None)
+            st.success("🎉 게임 기록을 성공적으로 불러왔습니다!")
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 파일 형식이 올바르지 않습니다: {e}")
 
     st.write("---")
     if st.button("🗑️ 모든 데이터 전체 초기화"):
