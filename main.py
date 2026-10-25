@@ -27,9 +27,10 @@ if "initialized" not in st.session_state:
     
     # 재화 및 인벤토리 상태
     st.session_state.gems = 0
-    st.session_state.guardian_shards = 0  # 수호의 조각
-    st.session_state.abilities = {}       # 보유 능력
-    st.session_state.ability_shards = {}  # 개별 능력 승급용 조각
+    st.session_state.guardian_shards = 0   # 수호의 조각
+    st.session_state.star5_tickets = 0     # 5성 선택권 개수
+    st.session_state.abilities = {}        # 보유 능력
+    st.session_state.ability_shards = {}   # 개별 능력 승급용 조각
     st.session_state.equipped_ability = None
     st.session_state.banned_actions = []
     
@@ -56,6 +57,8 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
 # 안전 장치
+if "star5_tickets" not in st.session_state:
+    st.session_state.star5_tickets = 0
 if "pickup_pity" not in st.session_state:
     st.session_state.pickup_pity = 0
 if "guaranteed_pickup" not in st.session_state:
@@ -85,7 +88,8 @@ ABILITIES_POOL = {
         "🚨 경찰 (필살기 사용 시 성급별 확률로 상대 기술 밴)"
     ],
     "5성": [
-        "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+        "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)",
+        "🔥 불사조 (궁극기: 성급별 부활 효과)"
     ]
 }
 
@@ -114,7 +118,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 일반 뽑기 로직 (티어별 정확한 풀 매칭)
+# 일반 뽑기 로직
 def roll_single_item():
     st.session_state.pity_counter += 1
     if st.session_state.pity_counter >= 100:
@@ -131,7 +135,7 @@ def roll_single_item():
             
     if tier == "5성":
         st.session_state.pity_counter = 0
-        name = random.choice(ABILITIES_POOL["5성"])
+        name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)" # 일반뽑에선 광대만 등장
     elif tier == "4성":
         name = random.choice(ABILITIES_POOL["4성"])
     else:
@@ -154,7 +158,7 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 불사조 전용 픽업 뽑기 로직 (티어별 정확한 풀 매칭)
+# 불사조 전용 픽업 뽑기 로직
 def roll_pickup_item():
     st.session_state.pickup_pity += 1
     
@@ -257,11 +261,13 @@ with tab_gacha:
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
     
-    col_gem, col_guard = st.columns(2)
+    col_gem, col_guard, col_ticket = st.columns(3)
     with col_gem:
         st.metric("보유 보석", f"💎 {st.session_state.gems}개")
     with col_guard:
         st.metric("보유 수호의 조각", f"🛡️ {st.session_state.guardian_shards}개")
+    with col_ticket:
+        st.metric("보유 5성 선택권", f"🎟️ {st.session_state.star5_tickets}개")
     
     if st.session_state.is_gacha_open:
         st.divider()
@@ -372,6 +378,24 @@ with tab_char:
     st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다.")
     st.divider()
 
+    if st.session_state.get("star5_tickets", 0) > 0:
+        st.markdown(f"### 🎟️ 보유 5성 선택권: **{st.session_state.star5_tickets}개**")
+        chosen_5star = st.selectbox("선택할 5성 능력을 고르세요", ABILITIES_POOL["5성"])
+        if st.button("✨ 5성 선택권 사용하기"):
+            if st.session_state.star5_tickets > 0:
+                st.session_state.star5_tickets -= 1
+                name = chosen_5star
+                tier = "5성"
+                if name in st.session_state.abilities:
+                    st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
+                    st.success(f"🎉 [{name}] 이미 보유 중이므로 조각 1개가 추가되었습니다!")
+                else:
+                    st.session_state.abilities[name] = {"tier": tier, "stars": 0}
+                    st.session_state.ability_shards[name] = 0
+                    st.success(f"🎉 [{name}] 신규 획득 완료!")
+                st.rerun()
+        st.divider()
+
     if st.session_state.abilities:
         for name, data in list(st.session_state.abilities.items()):
             stars = data["stars"]
@@ -430,14 +454,29 @@ with tab_char:
 
     st.divider()
     st.subheader("🏪 수호의 조각 교환 상점")
-    if st.button("다이아 100개 교환하기"):
-        if st.session_state.guardian_shards >= 10:
-            st.session_state.guardian_shards -= 10
-            st.session_state.gems += 100
-            st.success("✨ 교환 성공!")
-            st.rerun()
-        else:
-            st.error("수호의 조각 부족!")
+    
+    shop_col1, shop_col2 = st.columns(2)
+    with shop_col1:
+        st.markdown("💎 **다이아 교환**\n* 수호의 조각 10개 ➡️ 다이아 100개")
+        if st.button("다이아 100개 교환"):
+            if st.session_state.guardian_shards >= 10:
+                st.session_state.guardian_shards -= 10
+                st.session_state.gems += 100
+                st.success("✨ 다이아 100개 교환 성공!")
+                st.rerun()
+            else:
+                st.error("수호의 조각이 부족합니다! (필요: 10개)")
+                
+    with shop_col2:
+        st.markdown("🎟️ **5성 선택권 교환**\n* 수호의 조각 300개 ➡️ 5성 선택권 1개")
+        if st.button("5성 선택권 교환"):
+            if st.session_state.guardian_shards >= 300:
+                st.session_state.guardian_shards -= 300
+                st.session_state.star5_tickets += 1
+                st.success("🎉 5성 선택권 1개 교환 성공!")
+                st.rerun()
+            else:
+                st.error("수호의 조각이 부족합니다! (필요: 300개)")
 
     st.divider()
     st.subheader("🔑 비밀 제작자 코드")
@@ -445,7 +484,8 @@ with tab_char:
     if st.button("코드 제출"):
         if creator_code_input == "siu0925":
             st.session_state.gems += 5000
-            st.success("🎉 보석 5,000개 지급!")
+            st.session_state.guardian_shards += 300  # 테스트용 조각 지원
+            st.success("🎉 보석 5,000개 및 수호의 조각 300개 지급!")
             st.rerun()
         else:
             st.error("❌ 올바르지 않은 코드입니다.")
