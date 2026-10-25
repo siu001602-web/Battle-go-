@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (5성 만렙 달성 이후 중복 시 수호의 조각 변환)
+# 단일 뽑기 로직 (5성 만렙 달성 이후 중복 시 또는 4/5성 중복 시 수호의 조각 변환 반영)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -97,8 +97,18 @@ def roll_single_item():
                 st.session_state.guardian_shards += 100
                 shard_gained_msg = "5성 만렙 중복! 수호의 조각 +100개 전환!"
         else:
+            # 만렙 전에는 개별 승급 조각 획득, 단 4성/5성은 조각 획득과 별개로 중복 시 수호의 조각도 추가 적립 원하시면 여기서 제어 가능
+            # 요청사항 반영: 4성은 조각 1개당 10개 / 5성은 조각 1개당 100개 (만렙 여부와 관계없이 혹은 만렙 이후 적용)
             st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
             shard_gained_msg = f"[{name}] 개별 승급 조각 +1개 획득!"
+            
+            # 이미 보유 중일 때 뽑았을 때의 수호의 조각 전환 규칙 명시 적용
+            if tier == "4성":
+                st.session_state.guardian_shards += 10
+                shard_gained_msg += " & 수호의 조각 +10개 전환!"
+            elif tier == "5성":
+                st.session_state.guardian_shards += 100
+                shard_gained_msg += " & 수호의 조각 +100개 전환!"
     else:
         st.session_state.abilities[name] = {"tier": tier, "stars": 0}
         if name not in st.session_state.ability_shards:
@@ -140,13 +150,13 @@ tab_battle, tab_gacha, tab_char = st.tabs(["🎮 배틀하기", "✨ 능력 뽑�
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
-    **📋 [뽑기 규칙 및 컷씬 안내]**
+    **📋 [뽑기 규칙 및 보상 안내]**
     * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 & 🌟 노란색 별 반짝임 컷씬)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 & 💜 보라색 별 반짝임 컷씬)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
     * 🔄 **중복 획득 시 보상 규칙**:
-      - **5성 만렙 달성 전**: 각 능력별 개별 승급 조각 `+1개` 획득
-      - **5성 만렙 달성 후**: 3성은 그냥 사라짐 / 4성은 수호의 조각 `+10개` / 5성은 수호의 조각 `+100개` 전환!
+      - **4성 중복 시**: 수호의 조각 `+10개` 추가 적립!
+      - **5성 중복 시**: 수호의 조각 `+100개` 추가 적립!
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
@@ -204,18 +214,14 @@ with tab_gacha:
                     is_dup = g_name in st.session_state.abilities
                     msg = "(신규 획득)"
                     if is_dup:
-                        if st.session_state.abilities[g_name]["stars"] >= 5:
-                            if gt == "4성":
-                                st.session_state.guardian_shards += 10
-                                msg = "4성 만렙 중복! 수호의 조각 +10개 전환!"
-                            elif gt == "5성":
-                                st.session_state.guardian_shards += 100
-                                msg = "5성 만렙 중복! 수호의 조각 +100개 전환!"
-                            else:
-                                msg = "만렙 달성 상태이므로 조각이 사라집니다."
-                        else:
-                            st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
-                            msg = f"[{g_name}] 개별 승급 조각 +1개 획득!"
+                        st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
+                        msg = f"[{g_name}] 개별 승급 조각 +1개 획득!"
+                        if gt == "4성":
+                            st.session_state.guardian_shards += 10
+                            msg += " & 수호의 조각 +10개!"
+                        elif gt == "5성":
+                            st.session_state.guardian_shards += 100
+                            msg += " & 수호의 조각 +100개!"
                     else:
                         st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
                         if g_name not in st.session_state.ability_shards:
@@ -320,12 +326,9 @@ with tab_char:
                 target_5star = ABILITIES_POOL["5성"][0]
                 
                 if target_5star in st.session_state.abilities:
-                    if st.session_state.abilities[target_5star]["stars"] >= 5:
-                        st.session_state.guardian_shards += 100
-                        st.success("🎉 이미 만렙인 5성이므로 수호의 조각 100개 페이백이 적용되었습니다!")
-                    else:
-                        st.session_state.ability_shards[target_5star] = st.session_state.ability_shards.get(target_5star, 0) + 1
-                        st.success("🎉 이미 보유한 5성이므로 해당 능력 조각 +1개가 지급되었습니다!")
+                    st.session_state.ability_shards[target_5star] = st.session_state.ability_shards.get(target_5star, 0) + 1
+                    st.session_state.guardian_shards += 100  # 이미 보유 시 추가 페이백 예시
+                    st.success("🎉 이미 보유한 5성이므로 조각 +1개 및 수호의 조각 100개 페이백이 적용되었습니다!")
                 else:
                     st.session_state.abilities[target_5star] = {"tier": "5성", "stars": 0}
                     if target_5star not in st.session_state.ability_shards:
