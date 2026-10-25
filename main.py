@@ -291,12 +291,12 @@ with tab_char:
                     healer_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
                     current_healer_prob = healer_prob_map.get(stars, 80.0)
                     healer_heal_amount = 4 if stars >= 5 else 3
-                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복[span_0](start_span)[span_0](end_span)[span_1](start_span)[span_1](end_span)")
+                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복")
                 elif "경찰" in name:
                     cop_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
                     current_cop_prob = cop_prob_map.get(stars, 80.0)
                     cop_ban_count = 2 if stars >= 5 else 1
-                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴[span_2](start_span)[span_2](end_span)")
+                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴")
                 st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
             with c_col2:
                 if stars < 5:
@@ -418,7 +418,7 @@ with tab_char:
         st.rerun()
 
 with tab_battle:
-    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (매 5턴마다 필살기 게이지 자동 충전)")
+    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (매 5턴마다 필살기 즉시 충전)")
     
     equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
     st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")
@@ -437,14 +437,14 @@ with tab_battle:
     col1, col2, col3 = st.columns(3)
     with col1:
         buff_text = f" 🔥버프({p_wait}턴)" if p_wait > 0 else ""
-        ult_text = f" ✨필살기게이지({p_ult}/3)"
-        st.metric("내 체력", f"{render_hp(p_hp)}{buff_text}\n{ult_text}")
+        ult_status = "✨ [사용 가능!]" if p_ult >= 3 else f"✨ 충전중({p_ult}/3)"
+        st.metric("내 체력", f"{render_hp(p_hp)}{buff_text}\n{ult_status}")
     with col2:
         st.metric("현재 턴", f"{turn}턴")
     with col3:
         ai_buff_text = f" 🔥버프({ai_wait}턴)" if ai_wait > 0 else ""
-        ai_ult_text = f" ✨필살기게이지({ai_ult}/3)"
-        st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}\n{ai_ult_text}")
+        ai_ult_status = "✨ [사용 가능!]" if ai_ult >= 3 else f"✨ 충전중({ai_ult}/3)"
+        st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}\n{ai_ult_status}")
 
     st.divider()
 
@@ -464,7 +464,7 @@ with tab_battle:
         
         banned_list = st.session_state.get("banned_actions", [])
         if banned_list:
-            st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다[span_3](start_span)[span_3](end_span)!")
+            st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
 
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         
@@ -552,9 +552,9 @@ with tab_battle:
                     
                     if random.random() < healer_success_prob:
                         st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
-                        log_message += f"💊 [힐러 효과 발동!] 확률 {int(healer_success_prob*100)}% 성공! 체력이 {heal_amount} 회복되었습니다[span_4](start_span)[span_4](end_span)[span_5](start_span)[span_5](end_span)!\n"
+                        log_message += f"💊 [힐러 효과 발동!] 확률 {int(healer_success_prob*100)}% 성공! 체력이 {heal_amount} 회복되었습니다!\n"
                     else:
-                        log_message += f"💊 [힐러 효과 실패] 확률 {int(healer_success_prob*100)}% 실패로 회복되지 않았습니다.[span_6](start_span)[span_6](end_span)[span_7](start_span)[span_7](end_span)\n"
+                        log_message += f"💊 [힐러 효과 실패] 확률 {int(healer_success_prob*100)}% 실패로 회복되지 않았습니다.\n"
                 elif "경찰" in eq:
                     raw_name = eq.split("] ")[-1].replace("★", "").strip()
                     cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
@@ -567,9 +567,9 @@ with tab_battle:
                         all_actions = ["공격", "방어", "치료", "존버", "반격"]
                         banned = random.sample(all_actions, min(ban_count, len(all_actions)))
                         st.session_state.banned_actions = banned
-                        log_message += f"🚨 [경찰 효과 발동!] 확률 {int(cop_success_prob*100)}% 성공! 다음 턴 상대의 **{', '.join([f'[{b}]' for b in banned])}** 기술을 밴했습니다[span_8](start_span)[span_8](end_span)!\n"
+                        log_message += f"🚨 [경찰 효과 발동!] 확률 {int(cop_success_prob*100)}% 성공! 다음 턴 상대의 **{', '.join([f'[{b}]' for b in banned])}** 기술을 밴했습니다!\n"
                     else:
-                        log_message += f"🚨 [경찰 효과 실패] 확률 {int(cop_success_prob*100)}% 실패로 기술 밴에 실패했습니다.[span_9](start_span)[span_9](end_span)\n"
+                        log_message += f"🚨 [경찰 효과 실패] 확률 {int(cop_success_prob*100)}% 실패로 기술 밴에 실패했습니다.\n"
                 elif "광대" in eq:
                     if random.random() < 0.6:
                         p_dmg_deal += 3
@@ -693,13 +693,11 @@ with tab_battle:
             
             st.session_state.turn += 1
 
-            # 5턴이 지날 때마다 필살기 게이지 1씩 자동 충전 (최대 3)
+            # 매 5턴마다 필살기가 즉시 사용 가능하도록 게이지를 3으로 채움
             if st.session_state.turn % 5 == 0:
-                if st.session_state.player_ultimate < 3:
-                    st.session_state.player_ultimate += 1
-                if st.session_state.ai_ultimate < 3:
-                    st.session_state.ai_ultimate += 1
-                log_message += "\n⏰ **[시간 경과]** 5턴이 지나 플레이어와 상대의 필살기 게이지가 1 충전되었습니다!"
+                st.session_state.player_ultimate = 3
+                st.session_state.ai_ultimate = 3
+                log_message += "\n⏰ **[시간 경과]** 5턴이 지나 플레이어와 상대의 필살기가 즉시 충전되었습니다!"
 
             st.session_state.log = log_message
             
