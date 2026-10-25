@@ -23,10 +23,10 @@ if "initialized" not in st.session_state:
     st.session_state.log = "심리전투를 시작합니다! 행동을 선택하세요."
     st.session_state.player_history = []
     
-    # 뽑기 시스템 관련 상태 (시작 보석 1000개, 무료 충전 제거)
-    st.session_state.gems = 1000
-    st.session_state.abilities = {}       # 보유 중인 능력 (키: 능력 이름, 값: 개수)
-    st.session_state.ability_shards = {}  # 보유 중인 능력 조각 (키: 능력 이름, 값: 조각 개수)
+    # 뽑기 시스템 관련 상태 (시작 보석 0개)
+    st.session_state.gems = 0
+    st.session_state.abilities = {}       # 보유 중인 능력 (키: 능력 이름, 값: 정보)
+    st.session_state.ability_shards = {}  # 보유 중인 능력 조각 (키: 능력 이름, 값: 개수)
     st.session_state.equipped_ability = None
     st.session_state.banned_action = None
     
@@ -126,10 +126,11 @@ tab_battle, tab_gacha = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵"])
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
-    **📋 [뽑기 규칙 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (오른쪽 보라/황금빛 문 연출 ✨)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (왼쪽 보라빛 문 연출 💜)
+    **📋 [뽑기 규칙 및 연출 안내]**
+    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 연출[span_0](start_span)[span_0](end_span) ✨)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 연출[span_1](start_span)[span_1](end_span) 💜)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
+    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득[span_2](start_span)[span_2](end_span)!
     * 🔄 **중복 획득 시**: 해당 능력의 **'조각 +1개'**로 자동 변환됩니다!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
@@ -143,12 +144,12 @@ with tab_gacha:
                 st.session_state.gems -= 100
                 res = roll_single_item()
                 
-                # 연출 및 결과 출력
+                # 등급별 영상 연출 적용
                 if res["tier"] == "5성":
-                    st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80", caption="🌟 [5성 광대 등장!] 빛나는 오른쪽 문 연출 찰칵!")
+                    st.video("1000000778.mp4")  # 오른쪽 5성 연출 영상[span_3](start_span)[span_3](end_span)[span_4](start_span)[span_4](end_span)
                     st.balloons()
                 elif res["tier"] == "4성":
-                    st.image("https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80", caption="✨ [4성 특급 등장!] 보라빛 왼쪽 문 연출!")
+                    st.video("1000000777.mp4")  # 왼쪽 4성 연출 영상[span_5](start_span)[span_5](end_span)[span_6](start_span)[span_6](end_span)
                 
                 if res["is_duplicate"]:
                     st.warning(f"🔄 이미 보유한 능력입니다! **[{res['tier']}] {res['name']}** 조각으로 변환되었습니다. (조각 +1)")
@@ -160,7 +161,7 @@ with tab_gacha:
                     else:
                         st.write(f"🔹 [일반] 신규 3성 능력 획득: {res['name']}")
             else:
-                st.error("보석이 부족합니다!")
+                st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
                 
     with g_col2:
         if st.button("✨ 10연차 뽑기 (보석 1000개 - 4성 확정)"):
@@ -186,6 +187,7 @@ with tab_gacha:
                 
                 st.success("📦 10연차 뽑기 완료! (4성 이상 1개 확정 포함)")
                 
+                # 10연차 최고 등급 연출
                 highest_tier = "3성"
                 if any(r["tier"] == "5성" for r in results):
                     highest_tier = "5성"
@@ -193,23 +195,22 @@ with tab_gacha:
                     highest_tier = "4성"
                     
                 if highest_tier == "5성":
-                    st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80", caption="🌟 10연차 대박! 5성 포함 연출 발동!")
+                    st.video("1000000778.mp4")
                     st.balloons()
                 elif highest_tier == "4성":
-                    st.image("https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80", caption="✨ 10연차 특급! 4성 포함 연출 발동!")
+                    st.video("1000000777.mp4")
                 
                 for r in results:
                     prefix = "🔄" if r["is_duplicate"] else ("🌟" if r["tier"] in ["4성", "5성"] else "🔹")
                     status_text = "(중복 -> 조각 변환)" if r["is_duplicate"] else "(신규 획득)"
                     st.write(f"{prefix} **[{r['tier']}]** {r['name']} {status_text}")
             else:
-                st.error("보석이 부족합니다!")
+                st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
 
     st.divider()
     st.subheader("🎒 내 능력 인벤토리 & 조각 현황")
     
     if st.session_state.abilities:
-        # 장착용 셀렉트박스
         ability_options = [f"[{data['tier']}] {name}" for name, data in st.session_state.abilities.items()]
         selected_ab = st.selectbox("전투에서 사용할 능력을 선택하세요", ability_options)
         if st.button("능력 장착하기"):
@@ -220,7 +221,7 @@ with tab_gacha:
         st.write("### 📌 보유 능력 및 조각 상세")
         for name, data in st.session_state.abilities.items():
             shards = st.session_state.ability_shards.get(name, 0)
-            st.write(- f"**[{data['tier']}] {name}** | 보유 중 | 조각: **{shards}개**")
+            st.write(f"- **[{data['tier']}] {name}** | 보유 중 | 조각: **{shards}개**")
             
         if st.button("🗑️ 능력 및 조각 전체 초기화"):
             st.session_state.abilities = {}
@@ -228,13 +229,13 @@ with tab_gacha:
             st.session_state.equipped_ability = None
             st.rerun()
     else:
-        st.write("아직 획득한 능력이 없습니다. 뽑기를 진행해 보세요!")
+        st.write("아직 획득한 능력이 없습니다. 배틀 승리를 통해 보석을 모아 뽑기를 진행해 보세요!")
 
 with tab_battle:
-    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요!")
+    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (AI 승리 시 💎 보석 20개 획득)")[span_7](start_span)[span_7](end_span)
     
     equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
-    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`[span_0](start_span)[span_0](end_span)")
+    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`[span_8](start_span)[span_8](end_span)")
     
     st.divider()
 
@@ -264,7 +265,7 @@ with tab_battle:
 
     if st.session_state.get("game_over", False):
         if st.session_state.winner == "player":
-            st.success("🎉 승리했습니다! 상대를 제압했어요!")
+            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")[span_9](start_span)[span_9](end_span)
         elif st.session_state.winner == "ai":
             st.error("💀 패배했습니다... 상대에게 졌습니다.")
         else:
@@ -507,7 +508,7 @@ with tab_battle:
             elif st.session_state.ai_hp == 0:
                 st.session_state.game_over = True
                 st.session_state.winner = "player"
-                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득[span_1](start_span)[span_1](end_span)
+                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득[span_10](start_span)[span_10](end_span)
                 
             st.rerun()
 
