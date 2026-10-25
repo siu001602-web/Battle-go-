@@ -36,7 +36,7 @@ if "initialized" not in st.session_state:
     # 뽑기 및 천장 시스템 상태
     st.session_state.pity_counter = 0      # 일반뽑 5성 미획득 카운트
     st.session_state.pickup_pity = 0       # 픽업뽑 5성 미획득 카운트
-    st.session_state.guaranteed_pickup = False # 불사조 픽업 확정 여부 (픽뚫 후 다음 5성 확정)
+    st.session_state.guaranteed_pickup = False # 불사조 픽업 확정 여부
     
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
@@ -44,8 +44,8 @@ if "initialized" not in st.session_state:
     st.session_state.is_5star_revealed = False
     
     # 불사조 부활 추적용 상태
-    st.session_state.phoenix_revive_active = False # 궁극기 사용 여부
-    st.session_state.phoenix_revive_turn = 0       # 궁극기 사용한 턴 기록
+    st.session_state.phoenix_revive_active = False
+    st.session_state.phoenix_revive_turn = 0
     
     # 멀티플레이(방 시스템) 관련 상태
     st.session_state.game_mode = "AI 배틀"
@@ -75,7 +75,7 @@ if "pvp_role" not in st.session_state:
 if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
 
-# 등급별 능력 풀 정의 (일반뽑용 - 불사조 미포함)
+# 등급별 능력 풀 정의 (일반뽑용)
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -85,7 +85,7 @@ ABILITIES_POOL = {
         "🚨 경찰 (필살기 사용 시 성급별 확률로 상대 기술 밴)"
     ],
     "5성": [
-        "🤡 광대 (필살기 사용 시 60% 확률로 상대 피 -3 / 40% 확률로 본인 피 -2)"
+        "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
     ]
 }
 
@@ -155,13 +155,12 @@ def roll_single_item():
 def roll_pickup_item():
     st.session_state.pickup_pity += 1
     
-    # 100회 천장이거나 일반 확률로 5성이 뜰 때
     if st.session_state.pickup_pity >= 100:
         hit_5star = True
         st.session_state.pickup_pity = 0
     else:
         rand = random.random() * 100
-        if rand < 0.1: # 5성 확률 0.1% (또는 편의상 테스트를 위해 동일 적용)
+        if rand < 0.1:
             hit_5star = True
             st.session_state.pickup_pity = 0
         else:
@@ -169,24 +168,21 @@ def roll_pickup_item():
 
     if hit_5star:
         tier = "5성"
-        # 픽업 확정 상태이거나 50:50 판정
         if st.session_state.guaranteed_pickup:
             name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
-            st.session_state.guaranteed_pickup = False # 확정 소모
+            st.session_state.guaranteed_pickup = False
         else:
             if random.random() < 0.5:
                 name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
             else:
-                name = "🤡 광대 (필살기 사용 시 60% 확률로 상대 피 -3 / 40% 확률로 본인 피 -2)"
-                st.session_state.guaranteed_pickup = True # 픽뚫 시 다음 5성 픽업 확정!
+                name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+                st.session_state.guaranteed_pickup = True
     else:
-        # 5성이 안 떴을 경우 4성 혹은 3성
         rand_sub = random.random() * 100
         if rand_sub < 5.0:
             tier = "4성"
         else:
             tier = "3성"
-        # 4성/3성 풀에서 랜덤 추출 (불사조 픽업이므로 4성 힐러/경찰 또는 3성 검투사)
         all_sub_pool = ABILITIES_POOL["4성"] + ABILITIES_POOL["3성"]
         name = random.choice(all_sub_pool)
 
@@ -249,7 +245,6 @@ with tab_gacha:
         * 🌟 **5성 등장 시**: **50% 확률로 불사조 / 50% 확률로 광대(픽뚫)**
         * 🛡️ **천장 및 확정 시스템**: 100회 내 5성 미등장 시 확정! 만약 픽뚫(광대)이 나면 **그다음 5성은 무조건 불사조 확정!**
         * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
-        * ⚠️ *불사조는 일반 뽑기에서 등장하지 않습니다.*
         """)
     else:
         pity_left = 100 - st.session_state.pity_counter
@@ -257,7 +252,6 @@ with tab_gacha:
         **📋 [일반 뽑기 규칙]**
         * 🌟 **5성 (광대)** : **0.1%** | ✨ **4성** : **5.0%** | 🔹 **3성** : **94.9%**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
-        * ⚠️ *불사조는 오직 전용 픽업 뽑기에서만 획득 가능합니다.*
         """)
     
     col_gem, col_guard = st.columns(2)
@@ -278,7 +272,6 @@ with tab_gacha:
         name = item["name"]
         is_dup = item["is_duplicate"]
         
-        # 5성이고 아직 오픈되지 않았다면 빈 미스터리 화면 표시
         if tier == "5성" and not st.session_state.is_5star_revealed:
             st.markdown(f"""
             <div style="background-color: #222; border: 4px dashed #FFC107; padding: 50px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
@@ -393,7 +386,17 @@ with tab_char:
             with c_col1:
                 st.markdown(f"### **[{data['tier']}] {name}**")
                 st.write(f"등급 성취도: `{star_display}` ({stars}/5성)")
-                if "불사조" in name:
+                if "광대" in name:
+                    clown_map = {
+                        0: "65% 확률 상대 피 -3 / 35% 확률 본인 피 -2",
+                        1: "70% 확률 상대 피 -3 / 30% 확률 본인 피 -2",
+                        2: "70% 확률 상대 피 -3 / 30% 확률 본인 피 -1",
+                        3: "75% 확률 상대 피 -3 / 25% 확률 본인 피 -1",
+                        4: "80% 확률 상대 피 -3 / 20% 확률 본인 피 -1",
+                        5: "80% 확률 상대 피 -3 / 20% 확률 본인 피 -1"
+                    }
+                    st.write(f"🤡 필살기 효과: **{clown_map.get(stars)}**")
+                elif "불사조" in name:
                     st.write(f"🔥 궁극기 효과: **사망 시 2턴 내 70% 확률 부활**")
                 elif "검투사" in name:
                     st.write(f"⚔️ 필살기 2배 확률 적용")
@@ -571,7 +574,6 @@ with tab_battle:
         st.divider()
 
         if st.session_state.get("game_over", False):
-            # 불사조 부활 판정 로직 (사망 시 2턴 내에 궁극기를 눌렀고 70% 확률 성공 시)
             eq = st.session_state.get("equipped_ability")
             phoenix_revived = False
             
@@ -580,7 +582,7 @@ with tab_battle:
                     turns_passed = st.session_state.turn - st.session_state.phoenix_revive_turn
                     if turns_passed <= 2:
                         if random.random() < 0.7:
-                            st.session_state.player_hp = 3  # 부활 시 체력 3 회복
+                            st.session_state.player_hp = 3
                             st.session_state.game_over = False
                             st.session_state.winner = None
                             st.session_state.phoenix_already_used = True
@@ -695,12 +697,37 @@ with tab_battle:
                                 st.session_state.banned_actions = banned
                                 log_message += f"🚨 [경찰 발동!] 상대 기술 밴[span_2](start_span)[span_2](end_span)!\n"
                         elif "광대" in eq:
-                            if random.random() < 0.6:
+                            raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                            clown_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                            
+                            # 성급별 광대 확률 설정
+                            # 0성(1성): 65% / 35%, 1성(2성): 70% / 30%, 2성(3성): 70% / 30%, 3성(4성): 75% / 25%, 4~5성(5성): 80% / 20%
+                            prob_table = {
+                                0: 0.65,
+                                1: 0.70,
+                                2: 0.70,
+                                3: 0.75,
+                                4: 0.80,
+                                5: 0.80
+                            }
+                            self_damage_table = {
+                                0: 2,
+                                1: 2,
+                                2: 1,
+                                3: 1,
+                                4: 1,
+                                5: 1
+                            }
+                            
+                            success_p = prob_table.get(clown_stars, 0.80)
+                            self_dmg = self_damage_table.get(clown_stars, 1)
+                            
+                            if random.random() < success_p:
                                 p_dmg_deal += 3
-                                log_message += "🤡 [광대 대박!] 상대 피 추가 -3!\n"
+                                log_message += f"🤡 [광대 대박!] 상대 피 추가 -3! (확률 {int(success_p*100)}% 성공)\n"
                             else:
-                                st.session_state.player_hp = max(0, st.session_state.player_hp - 2)
-                                log_message += "🤡 [광대 역관광!] 본인 피 -2!\n"
+                                st.session_state.player_hp = max(0, st.session_state.player_hp - self_dmg)
+                                log_message += f"🤡 [광대 역관광!] 본인 피 -{self_dmg}! (확률 실패)\n"
 
                 elif player_choice == "공격":
                     if is_player_exhausted:
