@@ -921,4 +921,4 @@ with tab_battle:
     st.divider()
     st.subheader("📜 이번 턴 기록")
     st.info(st.session_state.get("log", "게임을 시작해주세요!"))
-원래있던 여기에다가 붙여줘
+
