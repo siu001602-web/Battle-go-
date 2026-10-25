@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import json
+import os
 
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
@@ -100,22 +101,29 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 화면을 덮는 컷씬 모달 팝업 정의 (지정된 비디오 파일 자동 재생)
+# 화면을 덮는 컷씬 모달 팝업 정의 (바이트 데이터로 안전하게 비디오 로드)[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
 @st.dialog("🌟 스페셜 컷씬 발동!", width="large")
 def show_gacha_cutscene(highest_tier, result_summary_text):
     if highest_tier == "5성":
         st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 컷씬]")
-        try:
-            st.video("1000000778.mp4", autoplay=True)
-        except:
-            st.write("황금빛 영상(1000000778.mp4)을 불러올 수 없습니다. 경로를 확인해주세요.")
+        video_path = "1000000778.mp4"
+        if os.path.exists(video_path):
+            with open(video_path, "rb") as f:
+                video_bytes = f.read()
+            st.video(video_bytes, format="video/mp4", autoplay=True)
+        else:
+            st.error(f"⚠️ 영상 파일('{video_path}')을 찾을 수 없습니다. main.py와 같은 폴더에 넣어주세요.")
         st.balloons()
+        
     elif highest_tier == "4성":
         st.markdown("### 💜✨ [4성 특급 등장! 보라빛 컷씬]")
-        try:
-            st.video("1000000777.mp4", autoplay=True)
-        except:
-            st.write("보라빛 영상(1000000777.mp4)을 불러올 수 없습니다. 경로를 확인해주세요.")
+        video_path = "1000000777.mp4"
+        if os.path.exists(video_path):
+            with open(video_path, "rb") as f:
+                video_bytes = f.read()
+            st.video(video_bytes, format="video/mp4", autoplay=True)
+        else:
+            st.error(f"⚠️ 영상 파일('{video_path}')을 찾을 수 없습니다. main.py와 같은 폴더에 넣어주세요.")
             
     st.divider()
     st.write(result_summary_text)
