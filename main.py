@@ -2,16 +2,12 @@ import streamlit as st
 import random
 import json
 import os
-from streamlit_local_storage import LocalStorage
 
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
 
-# 로컬 스토리지 객체 생성
-localS = LocalStorage()
-
-# --- 💾 데이터 자동 세이브 & 로드 함수 ---
-def save_game_data():
+# --- 💾 데이터 세이브/로드 함수 ---
+def get_save_data_str():
     data = {
         "gems": st.session_state.gems,
         "guardian_shards": st.session_state.guardian_shards,
@@ -23,10 +19,7 @@ def save_game_data():
         "pickup_pity": st.session_state.pickup_pity,
         "guaranteed_pickup": st.session_state.guaranteed_pickup
     }
-    json_str = json.dumps(data, ensure_ascii=False)
-    # 브라우저 로컬 스토리지에 자동 저장
-    localS.setItem("battle_game_save_data", json_str)
-    return json_str
+    return json.dumps(data, ensure_ascii=False, indent=4)
 
 def load_game_data(json_str):
     try:
@@ -63,7 +56,7 @@ if "initialized" not in st.session_state:
     st.session_state.log = "심리전투를 시작합니다! 행동을 선택하세요."
     st.session_state.player_history = []
     
-    # 기본 재화 및 상태
+    # 재화 및 인벤토리 상태
     st.session_state.gems = 0
     st.session_state.guardian_shards = 0
     st.session_state.star5_tickets = 0
@@ -72,6 +65,7 @@ if "initialized" not in st.session_state:
     st.session_state.equipped_ability = None
     st.session_state.banned_actions = []
     
+    # 뽑기 및 천장 시스템 상태
     st.session_state.pity_counter = 0
     st.session_state.pickup_pity = 0
     st.session_state.guaranteed_pickup = False
@@ -89,15 +83,7 @@ if "initialized" not in st.session_state:
     st.session_state.pvp_rooms = {}
     st.session_state.pvp_role = None
     
-    # 앱 최초 실행 시 브라우저 로컬 스토리지에서 데이터 불러오기 시도
-    saved_data = localS.getItem("battle_game_save_data")
-    if saved_data:
-        load_game_data(saved_data)
-        
     st.session_state.initialized = True
-
-# 데이터 변경될 때마다 자동 저장 실행
-save_game_data()
 
 # 안전 장치
 if "star5_tickets" not in st.session_state: st.session_state.star5_tickets = 0
@@ -166,7 +152,6 @@ def process_reward(tier, name):
         st.session_state.abilities[name] = {"tier": tier, "stars": 0}
         if name not in st.session_state.ability_shards:
             st.session_state.ability_shards[name] = 0
-    save_game_data()
     return is_duplicate
 
 def roll_single_item(is_guaranteed_4star=False):
@@ -265,35 +250,54 @@ def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
 
 st.title("⚔️ 심리전 턴제 배틀 & 능력 시스템")
 
-tab_battle, tab_gacha, tab_char, tab_save = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 & 교환소", "💾 계정 데이터 관리"])
+tab_battle, tab_gacha, tab_char, tab_save = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 & 교환소", "💾 계정 데이터 백업"])
 
 with tab_save:
-    st.subheader("💾 계정 데이터 관리 (자동 저장 + 백업)")
-    st.success("✨ 브라우저 로컬 스토리지에 데이터가 **실시간 자동 저장**됩니다! (브라우저를 껐다 켜도 유지됨)")
+    st.subheader("💾 계정 데이터 백업 & 복구 (스마트폰 호환)")
+    st.write("스마트폰이나 브라우저 환경에서 언제든 내 계정 데이터를 안전하게 저장하고 불러올 수 있습니다.")
     st.divider()
 
-    json_data_str = save_game_data()
+    # 1. 파일 다운로드 백업
+    current_save_str = get_save_data_str()
     st.download_button(
-        label="📥 백업 파일 다운로드 (스마트폰 저장용)",
-        data=json_data_str,
+        label="📥 세이브 파일 다운로드 (스마트폰 저장)",
+        data=current_save_str,
         file_name="battle_game_save.json",
         mime="application/json"
     )
+    st.caption("💡 버튼을 누르면 스마트폰에 `battle_game_save.json` 파일이 저장됩니다.")
 
     st.divider()
 
-    uploaded_file = st.file_uploader("📤 백업 파일 업로드 (데이터 복구)", type=["json"])
+    # 2. 파일 업로드 복구
+    uploaded_file = st.file_uploader("📤 세이브 파일 업로드 (데이터 복구)", type=["json"])
     if uploaded_file is not None:
         try:
-            string_data = uploaded_file.getvalue().decode("utf-8")
-            if load_game_data(string_data):
-                save_game_data()
+            file_content = uploaded_file.getvalue().decode("utf-8")
+            if load_game_data(file_content):
                 st.success("🎉 데이터를 성공적으로 불러왔습니다!")
                 st.rerun()
             else:
                 st.error("❌ 올바르지 않은 세이브 파일 형식입니다.")
         except Exception as e:
             st.error(f"❌ 파일 읽기 실패: {e}")
+
+    st.divider()
+
+    # 3. 텍스트 복사/붙여넣기 백업
+    st.markdown("### 📋 수동 세이브 코드 (텍스트 복사)")
+    st.text_area("아래 코드를 복사해서 메모장에 보관하세요.", value=current_save_str, height=120)
+    
+    pasted_code = st.text_area("복사해둔 세이브 코드를 여기에 붙여넣으세요.")
+    if st.button("✨ 코드로 데이터 불러오기"):
+        if pasted_code:
+            if load_game_data(pasted_code):
+                st.success("🎉 코드를 통해 데이터를 성공적으로 불러왔습니다!")
+                st.rerun()
+            else:
+                st.error("❌ 코드가 올바르지 않습니다.")
+        else:
+            st.error("코드를 입력해주세요.")
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기샵")
@@ -408,7 +412,6 @@ with tab_gacha:
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
                 st.session_state.is_gacha_open = True
-                save_game_data()
                 st.rerun()
             else:
                 st.error("보석이 부족합니다!")
@@ -429,7 +432,6 @@ with tab_gacha:
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
                 st.session_state.is_gacha_open = True
-                save_game_data()
                 st.rerun()
             else:
                 st.error("보석이 부족합니다!")
@@ -456,7 +458,6 @@ with tab_char:
                     else:
                         st.session_state.guardian_shards += 100
                         st.warning(f"⚠️ [{selected_owned_5star}] 이미 5성 만렙이므로 수호의 조각 100개로 전환되었습니다!")
-                    save_game_data()
                     st.rerun()
         else:
             st.info("💡 현재 보유 중인 5성 능력이 없습니다.")
@@ -482,7 +483,6 @@ with tab_char:
                         if shards >= 1:
                             st.session_state.ability_shards[name] -= 1
                             st.session_state.abilities[name]["stars"] += 1
-                            save_game_data()
                             st.success("승급 성공!")
                             st.rerun()
                         else:
@@ -496,7 +496,6 @@ with tab_char:
         selected_ab = st.selectbox("전투에서 사용할 능력을 선택하세요", ability_options)
         if st.button("능력 장착하기"):
             st.session_state.equipped_ability = selected_ab
-            save_game_data()
             st.success(f"장착 완료: {selected_ab}")
     else:
         st.write("보유한 능력이 없습니다. 뽑기샵에서 능력을 획득해 보세요!")
@@ -509,7 +508,6 @@ with tab_char:
             if st.session_state.guardian_shards >= 10:
                 st.session_state.guardian_shards -= 10
                 st.session_state.gems += 100
-                save_game_data()
                 st.success("✨ 다이아 100개 교환 성공!")
                 st.rerun()
             else:
@@ -520,7 +518,6 @@ with tab_char:
             if st.session_state.guardian_shards >= 300:
                 st.session_state.guardian_shards -= 300
                 st.session_state.star5_tickets += 1
-                save_game_data()
                 st.success("🎉 5성 선택권 교환 성공!")
                 st.rerun()
             else:
@@ -532,7 +529,6 @@ with tab_char:
     if st.button("코드 제출"):
         if creator_code_input == "siu0925":
             st.session_state.gems += 10000
-            save_game_data()
             st.success("🎉 보석 10,000개 지급!")
             st.rerun()
         else:
@@ -575,7 +571,6 @@ with tab_battle:
         
         if st.button("다시 하기"):
             reset_game()
-            save_game_data()
             st.rerun()
     else:
         st.subheader("행동을 선택하세요")
@@ -627,7 +622,6 @@ with tab_battle:
                 st.session_state.winner = "player"
                 st.session_state.gems += 100
                 
-            save_game_data()
             st.rerun()
 
     st.divider()
