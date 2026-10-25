@@ -78,7 +78,7 @@ if "pvp_role" not in st.session_state:
 if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
 
-# 등급별 능력 풀 정의 (정확하게 성급 분리)
+# 등급별 능력 풀 정의
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -118,29 +118,8 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 일반 뽑기 로직
-def roll_single_item():
-    st.session_state.pity_counter += 1
-    if st.session_state.pity_counter >= 100:
-        tier = "5성"
-        st.session_state.pity_counter = 0
-    else:
-        rand = random.random() * 100
-        if rand < 0.3:
-            tier = "5성"
-        elif rand < 5.3:
-            tier = "4성"
-        else:
-            tier = "3성"
-            
-    if tier == "5성":
-        st.session_state.pity_counter = 0
-        name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)" # 일반뽑에선 광대만 등장
-    elif tier == "4성":
-        name = random.choice(ABILITIES_POOL["4성"])
-    else:
-        name = random.choice(ABILITIES_POOL["3성"])
-    
+# 인벤토리 보상 처리 함수
+def process_reward(tier, name):
     is_duplicate = False
     if name in st.session_state.abilities:
         is_duplicate = True
@@ -155,23 +134,51 @@ def roll_single_item():
         st.session_state.abilities[name] = {"tier": tier, "stars": 0}
         if name not in st.session_state.ability_shards:
             st.session_state.ability_shards[name] = 0
-            
-    return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
+    return is_duplicate
 
-# 불사조 전용 픽업 뽑기 로직
-def roll_pickup_item():
+# 일반 뽑기 단건 로직
+def roll_single_item(is_guaranteed_4star=False):
+    st.session_state.pity_counter += 1
+    if st.session_state.pity_counter >= 100:
+        tier = "5성"
+        st.session_state.pity_counter = 0
+    elif is_guaranteed_4star:
+        # 10연차 마지막 픽 4성 이상 확정 (0.3% 확률로 5성, 아니면 4성)
+        rand = random.random() * 100
+        tier = "5성" if rand < 0.3 else "4성"
+    else:
+        rand = random.random() * 100
+        if rand < 0.3:
+            tier = "5성"
+        elif rand < 5.3:
+            tier = "4성"
+        else:
+            tier = "3성"
+            
+    if tier == "5성":
+        st.session_state.pity_counter = 0
+        name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+    elif tier == "4성":
+        name = random.choice(ABILITIES_POOL["4성"])
+    else:
+        name = random.choice(ABILITIES_POOL["3성"])
+    
+    is_dup = process_reward(tier, name)
+    return {"tier": tier, "name": name, "is_duplicate": is_dup}
+
+# 불사조 픽업 뽑기 단건 로직
+def roll_pickup_item(is_guaranteed_4star=False):
     st.session_state.pickup_pity += 1
     
     if st.session_state.pickup_pity >= 100:
         hit_5star = True
         st.session_state.pickup_pity = 0
+    elif is_guaranteed_4star:
+        rand = random.random() * 100
+        hit_5star = True if rand < 0.3 else False
     else:
         rand = random.random() * 100
-        if rand < 0.3:
-            hit_5star = True
-            st.session_state.pickup_pity = 0
-        else:
-            hit_5star = False
+        hit_5star = True if rand < 0.3 else False
 
     if hit_5star:
         tier = "5성"
@@ -185,30 +192,20 @@ def roll_pickup_item():
                 name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
                 st.session_state.guaranteed_pickup = True
     else:
-        rand_sub = random.random() * 100
-        if rand_sub < 5.0:
+        if is_guaranteed_4star:
             tier = "4성"
             name = random.choice(ABILITIES_POOL["4성"])
         else:
-            tier = "3성"
-            name = random.choice(ABILITIES_POOL["3성"])
+            rand_sub = random.random() * 100
+            if rand_sub < 5.0:
+                tier = "4성"
+                name = random.choice(ABILITIES_POOL["4성"])
+            else:
+                tier = "3성"
+                name = random.choice(ABILITIES_POOL["3성"])
 
-    is_duplicate = False
-    if name in st.session_state.abilities:
-        is_duplicate = True
-        if st.session_state.abilities[name]["stars"] >= 5:
-            if tier == "4성":
-                st.session_state.guardian_shards += 10
-            elif tier == "5성":
-                st.session_state.guardian_shards += 100
-        else:
-            st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
-    else:
-        st.session_state.abilities[name] = {"tier": tier, "stars": 0}
-        if name not in st.session_state.ability_shards:
-            st.session_state.ability_shards[name] = 0
-            
-    return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
+    is_dup = process_reward(tier, name)
+    return {"tier": tier, "name": name, "is_duplicate": is_dup}
 
 def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
     if ai_ultimate >= 3 and random.random() < 0.7:
@@ -250,7 +247,8 @@ with tab_gacha:
         st.info(f"""
         **🔥 [불사조 전용 픽업 규칙]**
         * 🌟 **5성 등장 확률**: **0.3%** (50% 확률 불사조 / 50% 확률 광대 픽뚫)
-        * 🛡️ **천장 및 확정 시스템**: 100회 내 5성 미등장 시 확정! 만약 픽뚫(광대)이 나면 **그다음 5성은 무조건 불사조 확정!**
+        * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
+        * 🛡️ **천장 시스템**: 100회 내 5성 미등장 시 확정! (픽뚫 시 다음 5성 불사조 확정)
         * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
         """)
     else:
@@ -258,6 +256,7 @@ with tab_gacha:
         st.info(f"""
         **📋 [일반 뽑기 규칙]**
         * 🌟 **5성 (광대)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
+        * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
     
@@ -364,7 +363,14 @@ with tab_gacha:
         if st.button("✨ 10연차 뽑기 (보석 1000개)"):
             if st.session_state.gems >= 1000:
                 st.session_state.gems -= 1000
-                results = [roll_pickup_item() for _ in range(10)] if "불사조" in banner_type else [roll_single_item() for _ in range(10)]
+                results = []
+                for i in range(10):
+                    is_last = (i == 9) # 10번째 뽑기
+                    if "불사조" in banner_type:
+                        results.append(roll_pickup_item(is_guaranteed_4star=is_last))
+                    else:
+                        results.append(roll_single_item(is_guaranteed_4star=is_last))
+                
                 st.session_state.gacha_results = results
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
@@ -484,7 +490,7 @@ with tab_char:
     if st.button("코드 제출"):
         if creator_code_input == "siu0925":
             st.session_state.gems += 5000
-            st.session_state.guardian_shards += 300  # 테스트용 조각 지원
+            st.session_state.guardian_shards += 300
             st.success("🎉 보석 5,000개 및 수호의 조각 300개 지급!")
             st.rerun()
         else:
