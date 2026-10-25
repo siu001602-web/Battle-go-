@@ -69,7 +69,7 @@ if "initialized" not in st.session_state:
     # 뽑기 및 천장 시스템 상태
     st.session_state.pity_counter = 0      # 일반뽑 5성 미획득 카운트
     st.session_state.pickup_pity = 0       # 픽업뽑 5성 미획득 카운트
-    st.session_state.guaranteed_pickup = False # 불사조 픽업 확정 여부
+    st.session_state.guaranteed_pickup = False # 픽업 확정 여부
     
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
@@ -112,7 +112,7 @@ if "equipped_ability" not in st.session_state:
 if "ai_stunned_turns" not in st.session_state:
     st.session_state.ai_stunned_turns = 0
 
-# 등급별 능력 풀 정의 (타임머신 5성 추가)
+# 등급별 능력 풀 정의 (일반 뽑기용 5성: 광대, 타임머신)
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -123,7 +123,6 @@ ABILITIES_POOL = {
     ],
     "5성": [
         "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)",
-        "🔥 불사조 (궁극기: 성급별 부활 효과)",
         "⏳ 타임머신 (필살기 사용 시 성급별 확률로 상대방 기절)"
     ]
 }
@@ -171,6 +170,7 @@ def process_reward(tier, name):
             st.session_state.ability_shards[name] = 0
     return is_duplicate
 
+# 일반 뽑기 (불사조 제외, 광대와 타임머신만 등장)
 def roll_single_item(is_guaranteed_4star=False):
     st.session_state.pity_counter += 1
     if st.session_state.pity_counter >= 100:
@@ -199,6 +199,7 @@ def roll_single_item(is_guaranteed_4star=False):
     is_dup = process_reward(tier, name)
     return {"tier": tier, "name": name, "is_duplicate": is_dup}
 
+# 불사조 전용 픽업 뽑기 (불사조 50% / 광대 25% / 타임머신 25%)
 def roll_pickup_item(is_guaranteed_4star=False):
     st.session_state.pickup_pity += 1
     
@@ -218,9 +219,14 @@ def roll_pickup_item(is_guaranteed_4star=False):
             name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
             st.session_state.guaranteed_pickup = False
         else:
-            # 5성 풀(광대, 불사조, 타임머신) 중 랜덤 픽업 로직
-            name = random.choice(ABILITIES_POOL["5성"])
-            if name != "🔥 불사조 (궁극기: 성급별 부활 효과)":
+            rand_val = random.random() * 100
+            if rand_val < 50:
+                name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
+            elif rand_val < 75:
+                name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+                st.session_state.guaranteed_pickup = True
+            else:
+                name = "⏳ 타임머신 (필살기 사용 시 성급별 확률로 상대방 기절)"
                 st.session_state.guaranteed_pickup = True
     else:
         if is_guaranteed_4star:
@@ -314,23 +320,23 @@ with tab_save:
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기샵")
-    banner_type = st.radio("뽑기 배너를 선택하세요", ["🔥 불사조 & 신규 픽업 뽑기", "✨ 일반 능력 뽑기"], horizontal=True)
+    banner_type = st.radio("뽑기 배너를 선택하세요", ["🔥 불사조 전용 픽업 뽑기", "✨ 일반 능력 뽑기 (불사조 제외)"], horizontal=True)
     
     if "불사조" in banner_type:
         pity_left_p = 100 - st.session_state.pickup_pity
-        guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 확정!]" if st.session_state.guaranteed_pickup else "🎲 [확률 적용 중]"
+        guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 불사조!]" if st.session_state.guaranteed_pickup else "🎲 [불사조 50% / 광대 25% / 타임머신 25%]"
         st.info(f"""
-        **🔥 [픽업 배너 규칙]**
-        * 🌟 **5성 등장 확률**: **0.3%**
+        **🔥 [불사조 전용 픽업 규칙]**
+        * 🌟 **5성 등장 확률**: **0.3%** (불사조 50% / 픽뚫 광대 25% / 픽뚫 타임머신 25%)
         * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
-        * 🛡️ **천장 시스템**: 100회 내 5성 미등장 시 확정!
+        * 🛡️ **천장 시스템**: 100회 내 5성 미등장 시 확정! (픽뚫 시 다음 5성 불사조 확정)
         * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
         """)
     else:
         pity_left = 100 - st.session_state.pity_counter
         st.info(f"""
-        **📋 [일반 뽑기 규칙]**
-        * 🌟 **5성 (광대, 불사조, 타임머신)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
+        **📋 [일반 뽑기 규칙 (불사조 미포함)]**
+        * 🌟 **5성 (광대, 타임머신)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
         * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
