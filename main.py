@@ -2,7 +2,7 @@ import streamlit as st
 import random
 
 # 페이지 설정
-st.set_page_config(page_title="심리전 턴제 배틀 & 능력 뽑기", page_icon="🎮", layout="centered")
+st.set_page_config(page_title="심리전 턴제 배틀 & 능력 뽑기 & 승급", page_icon="🎮", layout="centered")
 
 # 세션 상태 초기화
 if "initialized" not in st.session_state:
@@ -23,10 +23,10 @@ if "initialized" not in st.session_state:
     st.session_state.log = "심리전투를 시작합니다! 행동을 선택하세요."
     st.session_state.player_history = []
     
-    # 뽑기 시스템 관련 상태 (시작 보석 0개)
+    # 뽑기 및 승급 시스템 관련 상태 (시작 보석 0개)
     st.session_state.gems = 0
-    st.session_state.abilities = {}       # 보유 중인 능력 (키: 능력 이름, 값: 정보)
-    st.session_state.ability_shards = {}  # 보유 중인 능력 조각 (키: 능력 이름, 값: 개수)
+    st.session_state.abilities = {}       # 보유 중인 능력 (키: 능력 이름, 값: {"tier": 등급, "stars": 별개수(0~5)})
+    st.session_state.ability_shards = {}  # 보유 중인 능력 조각 (키: 능력 이름, 값: 조각 개수)
     st.session_state.equipped_ability = None
     st.session_state.banned_action = None
     
@@ -85,7 +85,7 @@ def roll_single_item():
         is_duplicate = True
         st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
     else:
-        st.session_state.abilities[name] = {"tier": tier, "count": 1}
+        st.session_state.abilities[name] = {"tier": tier, "stars": 0}  # 최초 획득 시 별 0개
         if name not in st.session_state.ability_shards:
             st.session_state.ability_shards[name] = 0
             
@@ -118,19 +118,20 @@ def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
             weights.append(1)
     return random.choices(choices, weights=weights, k=1)[0]
 
-st.title("⚔️ 심리전 턴제 배틀 & 능력 뽑기")
+st.title("⚔️ 심리전 턴제 배틀 & 능력 시스템")
 
-tab_battle, tab_gacha = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵"])
+# 상단 탭 구성 (배틀하기, 뽑기샵, 캐릭터창)
+tab_battle, tab_gacha, tab_char = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 창"])
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
     **📋 [뽑기 규칙 및 연출 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 연출 ✨)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 연출 💜)
+    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 연출 ✨)[span_0](start_span)[span_0](end_span)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 연출 💜)[span_1](start_span)[span_1](end_span)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
-    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
-    * 🔄 **중복 획득 시**: 해당 능력의 **'조각 +1개'**로 자동 변환됩니다!
+    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득[span_2](start_span)[span_2](end_span)!
+    * 🔄 **중복 획득 시**: 해당 능력의 **'조각 +1개'**로 자동 변환됩니다! (캐릭터 창에서 별 승급에 사용)
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
     
@@ -182,7 +183,7 @@ with tab_gacha:
                     if is_dup:
                         st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
                     else:
-                        st.session_state.abilities[g_name] = {"tier": gt, "count": 1}
+                        st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
                         if g_name not in st.session_state.ability_shards:
                             st.session_state.ability_shards[g_name] = 0
                             
@@ -215,21 +216,43 @@ with tab_gacha:
             else:
                 st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
 
+with tab_char:
+    st.subheader("👥 캐릭터 창 & 승급 시스템")
+    st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다!")
     st.divider()
-    st.subheader("🎒 내 능력 인벤토리 & 조각 현황")
-    
+
     if st.session_state.abilities:
-        ability_options = [f"[{data['tier']}] {name}" for name, data in st.session_state.abilities.items()]
+        for name, data in list(st.session_state.abilities.items()):
+            stars = data["stars"]
+            star_display = "★" * stars + "☆" * (5 - stars)
+            shards = st.session_state.ability_shards.get(name, 0)
+            
+            c_col1, c_col2 = st.columns([3, 1])
+            with c_col1:
+                st.markdown(f"### **[{data['tier']}] {name}**")
+                st.write(f"등급 성취도: `{star_display}` ({stars}/5성)")
+                st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
+            with c_col2:
+                if stars < 5:
+                    if st.button(f"⭐ 승급하기", key=f"upgrade_{name}"):
+                        if shards >= 1:
+                            st.session_state.ability_shards[name] -= 1
+                            st.session_state.abilities[name]["stars"] += 1
+                            st.success(f"🎉 [{name}] 승급 성공! ({stars + 1}성 달성)")
+                            st.rerun()
+                        else:
+                            st.error("조각이 부족합니다! (중복 획득 필요)")
+                else:
+                    st.markdown("🔥 **최고 등급 달성 완료!**")
+            st.divider()
+            
+        # 전투 장착 세팅
+        st.subheader("🛡️ 전투 장착 능력 선택")
+        ability_options = [f"[{data['tier']}] {'★' * data['stars']} {name}" for name, data in st.session_state.abilities.items()]
         selected_ab = st.selectbox("전투에서 사용할 능력을 선택하세요", ability_options)
         if st.button("능력 장착하기"):
             st.session_state.equipped_ability = selected_ab
             st.success(f"장착 완료: {selected_ab}")
-        
-        st.write("---")
-        st.write("### 📌 보유 능력 및 조각 상세")
-        for name, data in st.session_state.abilities.items():
-            shards = st.session_state.ability_shards.get(name, 0)
-            st.write(f"- **[{data['tier']}] {name}** | 보유 중 | 조각: **{shards}개**")
             
         if st.button("🗑️ 능력 및 조각 전체 초기화"):
             st.session_state.abilities = {}
@@ -237,13 +260,13 @@ with tab_gacha:
             st.session_state.equipped_ability = None
             st.rerun()
     else:
-        st.write("아직 획득한 능력이 없습니다. 배틀 승리를 통해 보석을 모아 뽑기를 진행해 보세요!")
+        st.write("보유한 능력이 없습니다. 뽑기샵에서 능력을 획득해 보세요!")
 
 with tab_battle:
-    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (AI 승리 시 💎 보석 20개 획득)")
+    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (AI 승리 시 💎 보석 20개 획득)")[span_3](start_span)[span_3](end_span)
     
     equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
-    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")
+    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")[span_4](start_span)[span_4](end_span)
     
     st.divider()
 
@@ -272,7 +295,7 @@ with tab_battle:
 
     if st.session_state.get("game_over", False):
         if st.session_state.winner == "player":
-            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")
+            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")[span_5](start_span)[span_5](end_span)
         elif st.session_state.winner == "ai":
             st.error("💀 패배했습니다... 상대에게 졌습니다.")
         else:
@@ -515,7 +538,7 @@ with tab_battle:
             elif st.session_state.ai_hp == 0:
                 st.session_state.game_over = True
                 st.session_state.winner = "player"
-                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득
+                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득[span_6](start_span)[span_6](end_span)
                 
             st.rerun()
 
