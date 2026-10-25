@@ -1,7 +1,7 @@
 import streamlit as st
 import random
 
-# 페이지 설정 (반드시 스크립트 가장 첫 줄에 위치해야 합니다)
+# 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 뽑기", page_icon="🎮", layout="centered")
 
 # 세션 상태 초기화
@@ -23,9 +23,10 @@ if "initialized" not in st.session_state:
     st.session_state.log = "심리전투를 시작합니다! 행동을 선택하세요."
     st.session_state.player_history = []
     
-    # 뽑기 시스템 관련 상태 (시작 보석 1000개)
+    # 뽑기 시스템 관련 상태 (시작 보석 1000개, 무료 충전 제거)
     st.session_state.gems = 1000
-    st.session_state.abilities = []
+    st.session_state.abilities = {}       # 보유 중인 능력 (키: 능력 이름, 값: 개수)
+    st.session_state.ability_shards = {}  # 보유 중인 능력 조각 (키: 능력 이름, 값: 조각 개수)
     st.session_state.equipped_ability = None
     st.session_state.banned_action = None
     
@@ -68,8 +69,8 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 함수 (확률: 3성 94.9%, 4성 5.0%, 5성 0.1%)
-def roll_single():
+# 단일 뽑기 로직 (중복 시 조각 변환 처리 포함)
+def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
         tier = "5성"
@@ -78,7 +79,18 @@ def roll_single():
     else:
         tier = "3성"
     name = random.choice(ABILITIES_POOL[tier])
-    return {"tier": tier, "name": name}
+    
+    # 중복 체크 및 인벤토리/조각 처리
+    is_duplicate = False
+    if name in st.session_state.abilities:
+        is_duplicate = True
+        st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
+    else:
+        st.session_state.abilities[name] = {"tier": tier, "count": 1}
+        if name not in st.session_state.ability_shards:
+            st.session_state.ability_shards[name] = 0
+            
+    return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
 # 스마트 AI 선택 로직 (매운맛)
 def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
@@ -109,16 +121,16 @@ def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
 
 st.title("⚔️ 심리전 턴제 배틀 & 능력 뽑기")
 
-# 상단 탭으로 배틀과 뽑기 분리
 tab_battle, tab_gacha = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵"])
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
-    **📋 [뽑기 확률 및 연출 안내]**
+    **📋 [뽑기 규칙 안내]**
     * 🌟 **5성 (광대)** : **0.1%** (오른쪽 보라/황금빛 문 연출 ✨)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (왼쪽 보라빛 문 연출 💜)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
+    * 🔄 **중복 획득 시**: 해당 능력의 **'조각 +1개'**로 자동 변환됩니다!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
     
@@ -129,19 +141,24 @@ with tab_gacha:
         if st.button("🎲 1회 뽑기 (보석 100개)"):
             if st.session_state.gems >= 100:
                 st.session_state.gems -= 100
-                res = roll_single()
-                st.session_state.abilities.append(res)
+                res = roll_single_item()
                 
-                # 등급별 연출 적용
+                # 연출 및 결과 출력
                 if res["tier"] == "5성":
                     st.image("https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=600&q=80", caption="🌟 [5성 광대 등장!] 빛나는 오른쪽 문 연출 찰칵!")
                     st.balloons()
-                    st.success(f"🎉 [대박!] 5성 능력 획득: **{res['name']}**")
                 elif res["tier"] == "4성":
                     st.image("https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80", caption="✨ [4성 특급 등장!] 보라빛 왼쪽 문 연출!")
-                    st.info(f"✨ [특급] 4성 능력 획득: **{res['name']}**")
+                
+                if res["is_duplicate"]:
+                    st.warning(f"🔄 이미 보유한 능력입니다! **[{res['tier']}] {res['name']}** 조각으로 변환되었습니다. (조각 +1)")
                 else:
-                    st.write(f"🔹 [일반] 3성 능력 획득: {res['name']}")
+                    if res["tier"] == "5성":
+                        st.success(f"🎉 [대박!] 신규 5성 능력 획득: **{res['name']}**")
+                    elif res["tier"] == "4성":
+                        st.info(f"✨ [특급] 신규 4성 능력 획득: **{res['name']}**")
+                    else:
+                        st.write(f"🔹 [일반] 신규 3성 능력 획득: {res['name']}")
             else:
                 st.error("보석이 부족합니다!")
                 
@@ -149,11 +166,23 @@ with tab_gacha:
         if st.button("✨ 10연차 뽑기 (보석 1000개 - 4성 확정)"):
             if st.session_state.gems >= 1000:
                 st.session_state.gems -= 1000
-                results = [roll_single() for _ in range(10)]
-                if not any(item["tier"] in ["4성", "5성"] for item in results):
+                results = [roll_single_item() for _ in range(10)]
+                
+                # 4성 확정 보정
+                has_4star_or_higher = any(item["tier"] in ["4성", "5성"] for item in results)
+                if not has_4star_or_higher:
                     gt = "5성" if random.random() * 100 < 2 else "4성"
-                    results[-1] = {"tier": gt, "name": random.choice(ABILITIES_POOL[gt])}
-                st.session_state.abilities.extend(results)
+                    g_name = random.choice(ABILITIES_POOL[gt])
+                    
+                    is_dup = g_name in st.session_state.abilities
+                    if is_dup:
+                        st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
+                    else:
+                        st.session_state.abilities[g_name] = {"tier": gt, "count": 1}
+                        if g_name not in st.session_state.ability_shards:
+                            st.session_state.ability_shards[g_name] = 0
+                            
+                    results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup}
                 
                 st.success("📦 10연차 뽑기 완료! (4성 이상 1개 확정 포함)")
                 
@@ -170,31 +199,36 @@ with tab_gacha:
                     st.image("https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=600&q=80", caption="✨ 10연차 특급! 4성 포함 연출 발동!")
                 
                 for r in results:
-                    prefix = "🌟" if r["tier"] in ["4성", "5성"] else "🔹"
-                    st.write(f"{prefix} **[{r['tier']}]** {r['name']}")
+                    prefix = "🔄" if r["is_duplicate"] else ("🌟" if r["tier"] in ["4성", "5성"] else "🔹")
+                    status_text = "(중복 -> 조각 변환)" if r["is_duplicate"] else "(신규 획득)"
+                    st.write(f"{prefix} **[{r['tier']}]** {r['name']} {status_text}")
             else:
                 st.error("보석이 부족합니다!")
 
-    if st.button("💎 보석 1000개 무료 충전"):
-        st.session_state.gems += 1000
-        st.success("보석 1000개 충전 완료!")
-        st.rerun()
-
     st.divider()
-    st.subheader("🎒 내 능력 인벤토리 & 장착")
+    st.subheader("🎒 내 능력 인벤토리 & 조각 현황")
+    
     if st.session_state.abilities:
-        ability_options = [f"[{ab['tier']}] {ab['name']}" for ab in st.session_state.abilities]
-        selected_ab = st.selectbox("사용할 능력을 선택하세요", ability_options)
+        # 장착용 셀렉트박스
+        ability_options = [f"[{data['tier']}] {name}" for name, data in st.session_state.abilities.items()]
+        selected_ab = st.selectbox("전투에서 사용할 능력을 선택하세요", ability_options)
         if st.button("능력 장착하기"):
             st.session_state.equipped_ability = selected_ab
             st.success(f"장착 완료: {selected_ab}")
+        
+        st.write("---")
+        st.write("### 📌 보유 능력 및 조각 상세")
+        for name, data in st.session_state.abilities.items():
+            shards = st.session_state.ability_shards.get(name, 0)
+            st.write(- f"**[{data['tier']}] {name}** | 보유 중 | 조각: **{shards}개**")
             
-        if st.button("🗑️ 능력 목록 초기화"):
-            st.session_state.abilities = []
+        if st.button("🗑️ 능력 및 조각 전체 초기화"):
+            st.session_state.abilities = {}
+            st.session_state.ability_shards = {}
             st.session_state.equipped_ability = None
             st.rerun()
     else:
-        st.write("보유한 능력이 없습니다. 뽑기를 진행해 보세요!")
+        st.write("아직 획득한 능력이 없습니다. 뽑기를 진행해 보세요!")
 
 with tab_battle:
     st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요!")
