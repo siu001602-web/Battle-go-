@@ -912,7 +912,7 @@ with tab_battle:
                     elif st.session_state.ai_hp == 0:
                         st.session_state.game_over = True
                         st.session_state.winner = "player"
-                    st.rer()
+                    st.rerun()
 
         st.divider()
         st.info(st.session_state.get("log", "토너먼트를 진행하세요!"))
