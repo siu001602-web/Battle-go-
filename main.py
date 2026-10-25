@@ -129,7 +129,7 @@ if "ability_shards" not in st.session_state:
 # 등급별 능력 풀 정의 (일반 뽑기용 5성: 광대, 타임머신)
 ABILITIES_POOL = {
     "3성": [
-        "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
+        "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 +1)"
     ],
     "4성": [
         "💊 힐러 (필살기 사용 시 성급별 확률로 체력 회복)",
@@ -527,7 +527,10 @@ with tab_char:
             c_col1, c_col2 = st.columns([3, 1])
             with c_col1:
                 st.markdown(f"**[{data['tier']}] {name}** (`{star_display}` {stars}/5성)")
-                if "광대" in name:
+                if "검투사" in name:
+                    gladiator_map = {0: "50% 확률로 데미지 +1", 1: "55% 확률로 데미지 +1", 2: "60% 확률로 데미지 +1", 3: "65% 확률로 데미지 +1", 4: "70% 확률로 데미지 +1", 5: "75% 확률로 데미지 +1"}
+                    st.caption(f"⚔️ 효과: {gladiator_map.get(stars)}")
+                elif "광대" in name:
                     clown_map = {0: "65% 상대 피 -3 / 35% 본인 피 -2", 1: "70% 상대 피 -3 / 30% 본인 피 -2", 2: "70% 상대 피 -3 / 30% 본인 피 -1", 3: "75% 상대 피 -3 / 25% 본인 피 -1", 4: "80% 상대 피 -3 / 20% 본인 피 -1", 5: "80% 상대 피 -3 / 20% 본인 피 -1"}
                     st.caption(f"🤡 효과: {clown_map.get(stars)}")
                 elif "불사조" in name:
@@ -798,8 +801,8 @@ with tab_battle:
                                 prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
                                 success_prob = prob_mapping.get(gladiator_stars, 0.75)
                                 if random.random() < success_prob:
-                                    p_dmg_deal *= 2
-                                    log_message += f"⚔️ [검투사 발동!] 데미지 2배(6) 폭증!\n"
+                                    p_dmg_deal += 1
+                                    log_message += f"⚔️ [검투사 발동!] 추가 데미지 +1 적용!\n"
                             elif "힐러" in eq:
                                 raw_name = eq.split("] ")[-1].replace("★", "").strip()
                                 healer_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
@@ -928,6 +931,7 @@ with tab_battle:
                     elif st.session_state.ai_hp == 0:
                         st.session_state.game_over = True
                         st.session_state.winner = "player"
+                        st.session_state.gems += 100
                     st.rerun()
 
         st.divider()
@@ -1165,8 +1169,8 @@ with tab_battle:
                             prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
                             success_prob = prob_mapping.get(gladiator_stars, 0.75)
                             if random.random() < success_prob:
-                                p_dmg_deal *= 2
-                                log_message += f"⚔️ [검투사 발동!] 데미지 2배(6) 폭증!\n"
+                                p_dmg_deal += 1
+                                log_message += f"⚔️ [검투사 발동!] 추가 데미지 +1 적용!\n"
                         elif "힐러" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             healer_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
