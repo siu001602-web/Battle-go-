@@ -121,6 +121,10 @@ if "is_tournament" not in st.session_state:
     st.session_state.is_tournament = False
 if "tournament_stage" not in st.session_state:
     st.session_state.tournament_stage = None
+if "abilities" not in st.session_state:
+    st.session_state.abilities = {}
+if "ability_shards" not in st.session_state:
+    st.session_state.ability_shards = {}
 
 # 등급별 능력 풀 정의 (일반 뽑기용 5성: 광대, 타임머신)
 ABILITIES_POOL = {
