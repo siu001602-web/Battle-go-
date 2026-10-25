@@ -118,7 +118,6 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 인벤토리 보상 처리 함수
 def process_reward(tier, name):
     is_duplicate = False
     if name in st.session_state.abilities:
@@ -136,14 +135,12 @@ def process_reward(tier, name):
             st.session_state.ability_shards[name] = 0
     return is_duplicate
 
-# 일반 뽑기 단건 로직
 def roll_single_item(is_guaranteed_4star=False):
     st.session_state.pity_counter += 1
     if st.session_state.pity_counter >= 100:
         tier = "5성"
         st.session_state.pity_counter = 0
     elif is_guaranteed_4star:
-        # 10연차 마지막 픽 4성 이상 확정 (0.3% 확률로 5성, 아니면 4성)
         rand = random.random() * 100
         tier = "5성" if rand < 0.3 else "4성"
     else:
@@ -166,7 +163,6 @@ def roll_single_item(is_guaranteed_4star=False):
     is_dup = process_reward(tier, name)
     return {"tier": tier, "name": name, "is_duplicate": is_dup}
 
-# 불사조 픽업 뽑기 단건 로직
 def roll_pickup_item(is_guaranteed_4star=False):
     st.session_state.pickup_pity += 1
     
@@ -365,7 +361,7 @@ with tab_gacha:
                 st.session_state.gems -= 1000
                 results = []
                 for i in range(10):
-                    is_last = (i == 9) # 10번째 뽑기
+                    is_last = (i == 9)
                     if "불사조" in banner_type:
                         results.append(roll_pickup_item(is_guaranteed_4star=is_last))
                     else:
@@ -387,15 +383,18 @@ with tab_char:
     if st.session_state.get("star5_tickets", 0) > 0:
         st.markdown(f"### 🎟️ 보유 5성 선택권: **{st.session_state.star5_tickets}개**")
         chosen_5star = st.selectbox("선택할 5성 능력을 고르세요", ABILITIES_POOL["5성"])
-        if st.button("✨ 5성 선택권 사용하기"):
+        if st.button("✨ 5성 선택권 사용하기 (별 1개 증가 / 신규 획득)"):
             if st.session_state.star5_tickets > 0:
                 st.session_state.star5_tickets -= 1
                 name = chosen_5star
                 tier = "5성"
+                
                 if name in st.session_state.abilities:
+                    # 이미 보유 중이면 조각 1개 지급 -> 승급하기 편하게 처리
                     st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
-                    st.success(f"🎉 [{name}] 이미 보유 중이므로 조각 1개가 추가되었습니다!")
+                    st.success(f"🎉 [{name}] 이미 보유 중이므로 승급 조각 1개가 충전되었습니다!")
                 else:
+                    # 신규 획득 (0성)
                     st.session_state.abilities[name] = {"tier": tier, "stars": 0}
                     st.session_state.ability_shards[name] = 0
                     st.success(f"🎉 [{name}] 신규 획득 완료!")
