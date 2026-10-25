@@ -126,10 +126,10 @@ with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
     **📋 [뽑기 규칙 및 연출 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 연출 ✨)[span_0](start_span)[span_0](end_span)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 연출 💜)[span_1](start_span)[span_1](end_span)
+    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 연출 ✨)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 연출 💜)
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
-    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득[span_2](start_span)[span_2](end_span)!
+    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     * 🔄 **중복 획득 시**: 해당 능력의 **'조각 +1개'**로 자동 변환됩니다!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
@@ -240,10 +240,10 @@ with tab_gacha:
         st.write("아직 획득한 능력이 없습니다. 배틀 승리를 통해 보석을 모아 뽑기를 진행해 보세요!")
 
 with tab_battle:
-    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (AI 승리 시 💎 보석 20개 획득)")[span_3](start_span)[span_3](end_span)
+    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (AI 승리 시 💎 보석 20개 획득)")
     
     equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
-    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")[span_4](start_span)[span_4](end_span)
+    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")
     
     st.divider()
 
@@ -272,7 +272,7 @@ with tab_battle:
 
     if st.session_state.get("game_over", False):
         if st.session_state.winner == "player":
-            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")[span_5](start_span)[span_5](end_span)
+            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")
         elif st.session_state.winner == "ai":
             st.error("💀 패배했습니다... 상대에게 졌습니다.")
         else:
@@ -515,7 +515,7 @@ with tab_battle:
             elif st.session_state.ai_hp == 0:
                 st.session_state.game_over = True
                 st.session_state.winner = "player"
-                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득[span_6](start_span)[span_6](end_span)
+                st.session_state.gems += 20  # AI 승리 시 보석 20개 획득
                 
             st.rerun()
 
