@@ -6,6 +6,37 @@ import os
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
 
+# --- 💾 데이터 세이브/로드 관련 함수 ---
+def save_game_data():
+    data = {
+        "gems": st.session_state.gems,
+        "guardian_shards": st.session_state.guardian_shards,
+        "star5_tickets": st.session_state.star5_tickets,
+        "abilities": st.session_state.abilities,
+        "ability_shards": st.session_state.ability_shards,
+        "equipped_ability": st.session_state.equipped_ability,
+        "pity_counter": st.session_state.pity_counter,
+        "pickup_pity": st.session_state.pickup_pity,
+        "guaranteed_pickup": st.session_state.guaranteed_pickup
+    }
+    return json.dumps(data, ensure_ascii=False, indent=4)
+
+def load_game_data(json_str):
+    try:
+        data = json.loads(json_str)
+        st.session_state.gems = data.get("gems", 0)
+        st.session_state.guardian_shards = data.get("guardian_shards", 0)
+        st.session_state.star5_tickets = data.get("star5_tickets", 0)
+        st.session_state.abilities = data.get("abilities", {})
+        st.session_state.ability_shards = data.get("ability_shards", {})
+        st.session_state.equipped_ability = data.get("equipped_ability", None)
+        st.session_state.pity_counter = data.get("pity_counter", 0)
+        st.session_state.pickup_pity = data.get("pickup_pity", 0)
+        st.session_state.guaranteed_pickup = data.get("guaranteed_pickup", False)
+        return True
+    except Exception as e:
+        return False
+
 # 세션 상태 초기화
 if "initialized" not in st.session_state:
     st.session_state.max_hp = 5
@@ -231,7 +262,54 @@ def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
 
 st.title("⚔️ 심리전 턴제 배틀 & 능력 시스템")
 
-tab_battle, tab_gacha, tab_char = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 & 교환소"])
+tab_battle, tab_gacha, tab_char, tab_save = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 & 교환소", "💾 계정 데이터 관리"])
+
+with tab_save:
+    st.subheader("💾 계정 세이브 / 로드 (핸드폰 호환 지원)")
+    st.write("핸드폰이나 다른 기기에서도 데이터를 백업하고 불러올 수 있습니다.")
+    st.divider()
+
+    # 1. 파일로 내보내기 (핸드폰/PC 겸용 백업 파일 다운로드)
+    json_data_str = save_game_data()
+    st.download_button(
+        label="📥 백업 파일 다운로드 (스마트폰 저장용)",
+        data=json_data_str,
+        file_name="battle_game_save.json",
+        mime="application/json"
+    )
+    st.caption("💡 스마트폰에서 다운로드 버튼을 누르면 기기에 세이브 파일이 저장됩니다.")
+
+    st.divider()
+
+    # 2. 파일로 불러오기 (핸드폰/PC 겸용 백업 파일 업로드)
+    uploaded_file = st.file_uploader("📤 백업 파일 업로드 (데이터 복구)", type=["json"])
+    if uploaded_file is not None:
+        try:
+            string_data = uploaded_file.getvalue().decode("utf-8")
+            if load_game_data(string_data):
+                st.success("🎉 데이터를 성공적으로 불러왔습니다!")
+                st.rerun()
+            else:
+                st.error("❌ 올바르지 않은 세이브 파일 형식입니다.")
+        except Exception as e:
+            st.error(f"❌ 파일 읽기 실패: {e}")
+
+    st.divider()
+
+    # 3. 텍스트 코드로 복사/붙여넣기 (간편 백업용)
+    st.markdown("### 📋 수동 세이브 코드 (텍스트 복사/붙여넣기)")
+    st.text_area("아래 코드를 복사해서 메모장에 보관하거나 붙여넣으세요.", value=json_data_str, height=150, key="save_code_area")
+    
+    manual_input = st.text_area("복사해둔 세이브 코드를 여기에 붙여넣으세요.", key="load_code_area")
+    if st.button("✨ 코드로 데이터 불러오기"):
+        if manual_input:
+            if load_game_data(manual_input):
+                st.success("🎉 코드를 통해 데이터를 성공적으로 불러왔습니다!")
+                st.rerun()
+            else:
+                st.error("❌ 코드가 올바르지 않습니다.")
+        else:
+            st.error("코드를 입력해주세요.")
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기샵")
