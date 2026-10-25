@@ -33,12 +33,19 @@ if "initialized" not in st.session_state:
     st.session_state.equipped_ability = None
     st.session_state.banned_actions = []
     
-    # 뽑기 및 천장 시스템 상태 (100연차 천장)
-    st.session_state.pity_counter = 0  # 5성 미획득 카운트
+    # 뽑기 및 천장 시스템 상태
+    st.session_state.pity_counter = 0      # 일반뽑 5성 미획득 카운트
+    st.session_state.pickup_pity = 0       # 픽업뽑 5성 미획득 카운트
+    st.session_state.guaranteed_pickup = False # 불사조 픽업 확정 여부 (픽뚫 후 다음 5성 확정)
+    
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
-    st.session_state.is_5star_revealed = False  # 5성 카드 오픈 여부
+    st.session_state.is_5star_revealed = False
+    
+    # 불사조 부활 추적용 상태
+    st.session_state.phoenix_revive_active = False # 궁극기 사용 여부
+    st.session_state.phoenix_revive_turn = 0       # 궁극기 사용한 턴 기록
     
     # 멀티플레이(방 시스템) 관련 상태
     st.session_state.game_mode = "AI 배틀"
@@ -49,6 +56,10 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
 # 안전 장치
+if "pickup_pity" not in st.session_state:
+    st.session_state.pickup_pity = 0
+if "guaranteed_pickup" not in st.session_state:
+    st.session_state.guaranteed_pickup = False
 if "pity_counter" not in st.session_state:
     st.session_state.pity_counter = 0
 if "is_5star_revealed" not in st.session_state:
@@ -64,7 +75,7 @@ if "pvp_role" not in st.session_state:
 if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
 
-# 등급별 능력 풀 정의
+# 등급별 능력 풀 정의 (일반뽑용 - 불사조 미포함)
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -87,13 +98,15 @@ def reset_game():
     st.session_state.player_consecutive = 0
     st.session_state.ai_consecutive = 0
     st.session_state.player_ultimate = 0
-    st.session_state.ai_ult = 0
+    st.session_state.ai_ultimate = 0
     st.session_state.player_counter_cooldown = 0
     st.session_state.ai_counter_cooldown = 0
     st.session_state.game_over = False
     st.session_state.winner = None
     st.session_state.player_history = []
     st.session_state.banned_actions = []
+    st.session_state.phoenix_revive_active = False
+    st.session_state.phoenix_revive_turn = 0
     st.session_state.log = "게임이 초기화되었습니다. 다시 시작하세요!"
 
 def render_hp(current_hp, max_hp=5):
@@ -101,10 +114,9 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (100회 천장 반영)
+# 일반 뽑기 로직
 def roll_single_item():
     st.session_state.pity_counter += 1
-    
     if st.session_state.pity_counter >= 100:
         tier = "5성"
         st.session_state.pity_counter = 0
@@ -122,6 +134,62 @@ def roll_single_item():
         
     name = random.choice(ABILITIES_POOL[tier])
     
+    is_duplicate = False
+    if name in st.session_state.abilities:
+        is_duplicate = True
+        if st.session_state.abilities[name]["stars"] >= 5:
+            if tier == "4성":
+                st.session_state.guardian_shards += 10
+            elif tier == "5성":
+                st.session_state.guardian_shards += 100
+        else:
+            st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
+    else:
+        st.session_state.abilities[name] = {"tier": tier, "stars": 0}
+        if name not in st.session_state.ability_shards:
+            st.session_state.ability_shards[name] = 0
+            
+    return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
+
+# 불사조 전용 픽업 뽑기 로직
+def roll_pickup_item():
+    st.session_state.pickup_pity += 1
+    
+    # 100회 천장이거나 일반 확률로 5성이 뜰 때
+    if st.session_state.pickup_pity >= 100:
+        hit_5star = True
+        st.session_state.pickup_pity = 0
+    else:
+        rand = random.random() * 100
+        if rand < 0.1: # 5성 확률 0.1% (또는 편의상 테스트를 위해 동일 적용)
+            hit_5star = True
+            st.session_state.pickup_pity = 0
+        else:
+            hit_5star = False
+
+    if hit_5star:
+        tier = "5성"
+        # 픽업 확정 상태이거나 50:50 판정
+        if st.session_state.guaranteed_pickup:
+            name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
+            st.session_state.guaranteed_pickup = False # 확정 소모
+        else:
+            if random.random() < 0.5:
+                name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
+            else:
+                name = "🤡 광대 (필살기 사용 시 60% 확률로 상대 피 -3 / 40% 확률로 본인 피 -2)"
+                st.session_state.guaranteed_pickup = True # 픽뚫 시 다음 5성 픽업 확정!
+    else:
+        # 5성이 안 떴을 경우 4성 혹은 3성
+        rand_sub = random.random() * 100
+        if rand_sub < 5.0:
+            tier = "4성"
+        else:
+            tier = "3성"
+        # 4성/3성 풀에서 랜덤 추출 (불사조 픽업이므로 4성 힐러/경찰 또는 3성 검투사)
+        all_sub_pool = ABILITIES_POOL["4성"] + ABILITIES_POOL["3성"]
+        name = random.choice(all_sub_pool)
+
     is_duplicate = False
     if name in st.session_state.abilities:
         is_duplicate = True
@@ -170,18 +238,27 @@ st.title("⚔️ 심리전 턴제 배틀 & 능력 시스템")
 tab_battle, tab_gacha, tab_char = st.tabs(["🎮 배틀하기", "✨ 능력 뽑기샵", "👥 캐릭터 & 교환소"])
 
 with tab_gacha:
-    st.subheader("✨ 전투 능력 뽑기 시스템")
-    pity_left = 100 - st.session_state.pity_counter
-    st.info(f"""
-    **📋 [뽑기 규칙 및 보상 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드 / **미스터리 오픈 시스템**)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라색 배경 카드)
-    * 🔹 **3성 (검투사)** : **94.9%** (파란색 배경 카드)
-    * 🔥 **천장 시스템**: 100회 뽑기 동안 5성이 안 나오면 다음 뽑기 5성 확정! (남은 횟수: **{pity_left}회**)
-    * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 수호의 조각으로 전환됩니다.
-    * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
-    * 👥 **PvP 승리 시**: 보석 **100개** / 패배 시 **50개** 획득!
-    """)
+    st.subheader("✨ 전투 능력 뽑기샵")
+    banner_type = st.radio("뽑기 배너를 선택하세요", ["🔥 불사조 전용 픽업 뽑기", "✨ 일반 능력 뽑기"], horizontal=True)
+    
+    if "불사조" in banner_type:
+        pity_left_p = 100 - st.session_state.pickup_pity
+        guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 불사조!]" if st.session_state.guaranteed_pickup else "🎲 [50:50 확률 적용 중]"
+        st.info(f"""
+        **🔥 [불사조 전용 픽업 규칙]**
+        * 🌟 **5성 등장 시**: **50% 확률로 불사조 / 50% 확률로 광대(픽뚫)**
+        * 🛡️ **천장 및 확정 시스템**: 100회 내 5성 미등장 시 확정! 만약 픽뚫(광대)이 나면 **그다음 5성은 무조건 불사조 확정!**
+        * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
+        * ⚠️ *불사조는 일반 뽑기에서 등장하지 않습니다.*
+        """)
+    else:
+        pity_left = 100 - st.session_state.pity_counter
+        st.info(f"""
+        **📋 [일반 뽑기 규칙]**
+        * 🌟 **5성 (광대)** : **0.1%** | ✨ **4성** : **5.0%** | 🔹 **3성** : **94.9%**
+        * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
+        * ⚠️ *불사조는 오직 전용 픽업 뽑기에서만 획득 가능합니다.*
+        """)
     
     col_gem, col_guard = st.columns(2)
     with col_gem:
@@ -215,7 +292,6 @@ with tab_gacha:
                 st.session_state.is_5star_revealed = True
                 st.rerun()
         else:
-            # 일반 카드 또는 오픈된 5성 카드
             if tier == "5성":
                 bg_color = "#FFF3CD"
                 border_color = "#FFC107"
@@ -244,20 +320,18 @@ with tab_gacha:
             if "광대" in name:
                 if os.path.exists("1000000779.png"):
                     st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
-                else:
-                    st.warning("⚠️ '1000000779.png' 이미지 파일이 main.py와 같은 폴더에 없습니다!")
             
             c_prev, c_next, c_close = st.columns(3)
             with c_prev:
                 if idx > 0:
                     if st.button("◀ 이전 카드"):
-                        st.session_state.is_5star_revealed = False  # 이전 카드로 갈 때 초기화
+                        st.session_state.is_5star_revealed = False
                         st.session_state.gacha_index -= 1
                         st.rerun()
             with c_next:
                 if idx < total - 1:
                     if st.button("다음 카드 ▶"):
-                        st.session_state.is_5star_revealed = False  # 다음 카드로 갈 때 초기화
+                        st.session_state.is_5star_revealed = False
                         st.session_state.gacha_index += 1
                         st.rerun()
             with c_close:
@@ -275,7 +349,10 @@ with tab_gacha:
         if st.button("🎲 1회 뽑기 (보석 100개)"):
             if st.session_state.gems >= 100:
                 st.session_state.gems -= 100
-                res = roll_single_item()
+                if "불사조" in banner_type:
+                    res = roll_pickup_item()
+                else:
+                    res = roll_single_item()
                 st.session_state.gacha_results = [res]
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
@@ -285,36 +362,13 @@ with tab_gacha:
                 st.error("보석이 부족합니다!")
                 
     with g_col2:
-        if st.button("✨ 10연차 뽑기 (보석 1000개 - 4성 확정)"):
+        if st.button("✨ 10연차 뽑기 (보석 1000개)"):
             if st.session_state.gems >= 1000:
                 st.session_state.gems -= 1000
-                results = [roll_single_item() for _ in range(10)]
-                has_4star_or_higher = any(item["tier"] in ["4성", "5성"] for item in results)
-                if not has_4star_or_higher:
-                    if st.session_state.pity_counter >= 100:
-                        gt = "5성"
-                        st.session_state.pity_counter = 0
-                    else:
-                        gt = "5성" if random.random() * 100 < 2 else "4성"
-                        
-                    if gt == "5성":
-                        st.session_state.pity_counter = 0
-                        
-                    g_name = random.choice(ABILITIES_POOL[gt])
-                    is_dup = g_name in st.session_state.abilities
-                    if is_dup:
-                        if st.session_state.abilities[g_name]["stars"] >= 5:
-                            if gt == "4성":
-                                st.session_state.guardian_shards += 10
-                            elif gt == "5성":
-                                st.session_state.guardian_shards += 100
-                        else:
-                            st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
-                    else:
-                        st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
-                        if g_name not in st.session_state.ability_shards:
-                            st.session_state.ability_shards[g_name] = 0
-                    results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup}
+                if "불사조" in banner_type:
+                    results = [roll_pickup_item() for _ in range(10)]
+                else:
+                    results = [roll_single_item() for _ in range(10)]
                 
                 st.session_state.gacha_results = results
                 st.session_state.gacha_index = 0
@@ -339,20 +393,14 @@ with tab_char:
             with c_col1:
                 st.markdown(f"### **[{data['tier']}] {name}**")
                 st.write(f"등급 성취도: `{star_display}` ({stars}/5성)")
-                if "검투사" in name:
-                    prob_map = {0: 50, 1: 55, 2: 60, 3: 65, 4: 70, 5: 75}
-                    current_prob = prob_map.get(stars, 75)
-                    st.write(f"⚔️ 현재 필살기 2배 확률: **{current_prob}%**")
+                if "불사조" in name:
+                    st.write(f"🔥 궁극기 효과: **사망 시 2턴 내 70% 확률 부활**")
+                elif "검투사" in name:
+                    st.write(f"⚔️ 필살기 2배 확률 적용")
                 elif "힐러" in name:
-                    healer_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
-                    current_healer_prob = healer_prob_map.get(stars, 80.0)
-                    healer_heal_amount = 4 if stars >= 5 else 3
-                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복[span_0](start_span)[span_0](end_span)")
+                    st.write(f"💊 필살기 체력 회복 적용")
                 elif "경찰" in name:
-                    cop_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
-                    current_cop_prob = cop_prob_map.get(stars, 80.0)
-                    cop_ban_count = 2 if stars >= 5 else 1
-                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴[span_1](start_span)[span_1](end_span)")
+                    st.write(f"🚨 필살기 기술 밴 적용")
                 st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
             with c_col2:
                 if stars < 5:
@@ -379,31 +427,14 @@ with tab_char:
 
     st.divider()
     st.subheader("🏪 수호의 조각 교환 상점")
-    s_col1, s_col2 = st.columns(2)
-    with s_col1:
-        st.markdown("#### 💎 다이아 교환")
-        if st.button("다이아 100개 교환하기"):
-            if st.session_state.guardian_shards >= 10:
-                st.session_state.guardian_shards -= 10
-                st.session_state.gems += 100
-                st.success("✨ 교환 성공!")
-                st.rerun()
-            else:
-                st.error("수호의 조각 부족!")
-    with s_col2:
-        st.markdown("#### 🌟 5성 선택권")
-        if st.button("5성 광대 선택권 교환"):
-            if st.session_state.guardian_shards >= 300:
-                st.session_state.guardian_shards -= 300
-                target_5star = ABILITIES_POOL["5성"][0]
-                if target_5star in st.session_state.abilities:
-                    st.session_state.abilities[target_5star]["stars"] = 5
-                else:
-                    st.session_state.abilities[target_5star] = {"tier": "5성", "stars": 5}
-                st.success("🎉 5성 광대 획득!")
-                st.rerun()
-            else:
-                st.error("수호의 조각 부족!")
+    if st.button("다이아 100개 교환하기"):
+        if st.session_state.guardian_shards >= 10:
+            st.session_state.guardian_shards -= 10
+            st.session_state.gems += 100
+            st.success("✨ 교환 성공!")
+            st.rerun()
+        else:
+            st.error("수호의 조각 부족!")
 
     st.divider()
     st.subheader("🔑 비밀 제작자 코드")
@@ -540,6 +571,25 @@ with tab_battle:
         st.divider()
 
         if st.session_state.get("game_over", False):
+            # 불사조 부활 판정 로직 (사망 시 2턴 내에 궁극기를 눌렀고 70% 확률 성공 시)
+            eq = st.session_state.get("equipped_ability")
+            phoenix_revived = False
+            
+            if eq and "불사조" in eq and not st.session_state.get("phoenix_already_used", False):
+                if st.session_state.phoenix_revive_active:
+                    turns_passed = st.session_state.turn - st.session_state.phoenix_revive_turn
+                    if turns_passed <= 2:
+                        if random.random() < 0.7:
+                            st.session_state.player_hp = 3  # 부활 시 체력 3 회복
+                            st.session_state.game_over = False
+                            st.session_state.winner = None
+                            st.session_state.phoenix_already_used = True
+                            phoenix_revived = True
+                            st.session_state.log = "🔥 **[불사조 부활!]** 사망 후 2턴 이내에 불사조의 기운이 발동하여 70% 확률로 부활했습니다! 체력 3으로 부활합니다!"
+
+            if phoenix_revived:
+                st.rerun()
+
             if st.session_state.winner == "player":
                 st.success("🎉 승리했습니다! (💎 보석 20개 획득)")
             elif st.session_state.winner == "ai":
@@ -549,12 +599,13 @@ with tab_battle:
             
             if st.button("다시 하기"):
                 reset_game()
+                st.session_state.phoenix_already_used = False
                 st.rerun()
         else:
             st.subheader("행동을 선택하세요")
             banned_list = st.session_state.get("banned_actions", [])
             if banned_list:
-                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다[span_2](start_span)[span_2](end_span)!")
+                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다[span_0](start_span)[span_0](end_span)!")
 
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             player_choice = None
@@ -613,7 +664,11 @@ with tab_battle:
                     
                     eq = st.session_state.get("equipped_ability")
                     if eq and isinstance(eq, str):
-                        if "검투사" in eq:
+                        if "불사조" in eq:
+                            st.session_state.phoenix_revive_active = True
+                            st.session_state.phoenix_revive_turn = st.session_state.turn
+                            log_message += "🔥 [불사조 궁극기 활성화!] 향후 2턴 이내 사망 시 70% 확률로 부활합니다!\n"
+                        elif "검투사" in eq:
                             gladiator_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
                             prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
                             success_prob = prob_mapping.get(gladiator_stars, 0.75)
@@ -628,7 +683,7 @@ with tab_battle:
                             heal_amount = 4 if healer_stars >= 5 else 3
                             if random.random() < healer_success_prob:
                                 st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
-                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복[span_3](start_span)[span_3](end_span)!\n"
+                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복[span_1](start_span)[span_1](end_span)!\n"
                         elif "경찰" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
@@ -638,7 +693,7 @@ with tab_battle:
                             if random.random() < cop_success_prob:
                                 banned = random.sample(["공격", "방어", "치료", "존버", "반격"], min(ban_count, 5))
                                 st.session_state.banned_actions = banned
-                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴[span_4](start_span)[span_4](end_span)!\n"
+                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴[span_2](start_span)[span_2](end_span)!\n"
                         elif "광대" in eq:
                             if random.random() < 0.6:
                                 p_dmg_deal += 3
