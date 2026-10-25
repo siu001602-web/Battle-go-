@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (만렙 5성/5성급 달성 이후 중복 시 수호의 조각 변환)
+# 단일 뽑기 로직 (만렙 달성 후 중복 시 자동 전환)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -87,20 +87,18 @@ def roll_single_item():
     
     if name in st.session_state.abilities:
         is_duplicate = True
-        # 별(★) 개수가 5개(만렙) 이상일 때만 수호의 조각으로 전환
         if st.session_state.abilities[name]["stars"] >= 5:
             if tier == "3성":
-                shard_gained_msg = "3성 만렙 달성 상태이므로 조각이 사라집니다."
+                shard_gained_msg = "3성 만렙 중복"
             elif tier == "4성":
                 st.session_state.guardian_shards += 10
-                shard_gained_msg = "4성 만렙 중복! 수호의 조각 +10개 전환!"
+                shard_gained_msg = "수호의 조각 +10개 자동 전환"
             elif tier == "5성":
                 st.session_state.guardian_shards += 100
-                shard_gained_msg = "5성 만렙 중복! 수호의 조각 +100개 전환!"
+                shard_gained_msg = "수호의 조각 +100개 자동 전환"
         else:
-            # 만렙 전에는 일반 개별 승급 조각 획득
             st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
-            shard_gained_msg = f"[{name}] 개별 승급 조각 +1개 획득!"
+            shard_gained_msg = f"[{name}] 개별 승급 조각 +1개 획득"
     else:
         st.session_state.abilities[name] = {"tier": tier, "stars": 0}
         if name not in st.session_state.ability_shards:
@@ -148,7 +146,7 @@ with tab_gacha:
     * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
     * 🔄 **중복 획득 시 보상 규칙**:
       - **만렙(5성) 달성 전**: 개별 승급 조각 `+1개` 획득
-      - **만렙(5성) 달성 후**: 3성은 소멸 / 4성은 수호의 조각 `+10개` / 5성은 수호의 조각 `+100개` 전환!
+      - **만렙(5성) 달성 후**: 4성은 수호의 조각 `+10개` / 5성은 수호의 조각 `+100개`로 자동 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
@@ -209,15 +207,15 @@ with tab_gacha:
                         if st.session_state.abilities[g_name]["stars"] >= 5:
                             if gt == "4성":
                                 st.session_state.guardian_shards += 10
-                                msg = "4성 만렙 중복! 수호의 조각 +10개 전환!"
+                                msg = "수호의 조각 +10개 자동 전환"
                             elif gt == "5성":
                                 st.session_state.guardian_shards += 100
-                                msg = "5성 만렙 중복! 수호의 조각 +100개 전환!"
+                                msg = "수호의 조각 +100개 자동 전환"
                             else:
-                                msg = "만렙 달성 상태이므로 조각이 사라집니다."
+                                msg = "3성 만렙 중복"
                         else:
                             st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
-                            msg = f"[{g_name}] 개별 승급 조각 +1개 획득!"
+                            msg = f"[{g_name}] 개별 승급 조각 +1개 획득"
                     else:
                         st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
                         if g_name not in st.session_state.ability_shards:
