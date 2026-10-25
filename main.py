@@ -101,7 +101,7 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 화면을 덮는 컷씬 모달 팝업 정의 (바이트 데이터로 안전하게 비디오 로드)[span_2](start_span)[span_2](end_span)[span_3](start_span)[span_3](end_span)
+# 화면을 덮는 컷씬 모달 팝업 정의 (안전 장치 포함)
 @st.dialog("🌟 스페셜 컷씬 발동!", width="large")
 def show_gacha_cutscene(highest_tier, result_summary_text):
     if highest_tier == "5성":
@@ -112,7 +112,7 @@ def show_gacha_cutscene(highest_tier, result_summary_text):
                 video_bytes = f.read()
             st.video(video_bytes, format="video/mp4", autoplay=True)
         else:
-            st.error(f"⚠️ 영상 파일('{video_path}')을 찾을 수 없습니다. main.py와 같은 폴더에 넣어주세요.")
+            st.info("🎥 [황금빛 문이 열리는 컷씬 재생 중... (영상 파일이 없으면 이 메시지가 나옵니다)]")
         st.balloons()
         
     elif highest_tier == "4성":
@@ -123,7 +123,7 @@ def show_gacha_cutscene(highest_tier, result_summary_text):
                 video_bytes = f.read()
             st.video(video_bytes, format="video/mp4", autoplay=True)
         else:
-            st.error(f"⚠️ 영상 파일('{video_path}')을 찾을 수 없습니다. main.py와 같은 폴더에 넣어주세요.")
+            st.info("🎥 [보라빛 문이 열리는 컷씬 재생 중... (영상 파일이 없으면 이 메시지가 나옵니다)]")
             
     st.divider()
     st.write(result_summary_text)
