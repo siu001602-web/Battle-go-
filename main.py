@@ -32,12 +32,20 @@ if "initialized" not in st.session_state:
     st.session_state.equipped_ability = None
     st.session_state.banned_action = None
     
-    # 뽑기 결과 카드 넘기기용 세션 상태
+    # 뽑기 결과 카드 넘기기용 세션 상태 (에러 방지용 필수 추가)
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
     
     st.session_state.initialized = True
+
+# 기존 코드가 업그레이드될 때를 대비해 세션 변수 안전 장치 추가
+if "is_gacha_open" not in st.session_state:
+    st.session_state.is_gacha_open = False
+if "gacha_results" not in st.session_state:
+    st.session_state.gacha_results = []
+if "gacha_index" not in st.session_state:
+    st.session_state.gacha_index = 0
 
 # 등급별 능력 풀 정의
 ABILITIES_POOL = {
@@ -154,7 +162,7 @@ with tab_gacha:
     with col_guard:
         st.metric("보유 수호의 조각", f"🛡️ {st.session_state.guardian_shards}개")
     
-    # 뽑기 결과 카드 뒤집기 화면 (모달 팝업 형태)
+    # 뽑기 결과 카드 뒤집기 화면
     if st.session_state.is_gacha_open:
         st.divider()
         st.markdown("### 🎴 뽑기 결과 확인 (카드를 넘겨보세요!)")
@@ -167,25 +175,23 @@ with tab_gacha:
         name = item["name"]
         is_dup = item["is_duplicate"]
         
-        # 등급별 배경 스타일 및 이모지 설정
+        # 등급별 배경 스타일 설정
         if tier == "5성":
-            bg_color = "#FFF3CD"  # 연한 노란색
+            bg_color = "#FFF3CD"
             border_color = "#FFC107"
             tier_badge = "🌟 [5성 대박]"
-            if tier == "5성":
-                st.balloons()
+            st.balloons()
         elif tier == "4성":
-            bg_color = "#E2D9F3"  # 연한 보라색
+            bg_color = "#E2D9F3"
             border_color = "#6F42C1"
             tier_badge = "✨ [4성 특급]"
         else:
-            bg_color = "#D1ECF1"  # 연한 파란색
+            bg_color = "#D1ECF1"
             border_color = "#17A2B8"
             tier_badge = "🔹 [3성 일반]"
             
         dup_text = "🔄 (이미 보유 중 - 조각/전환 적용)" if is_dup else "🎉 (신규 획득!)"
         
-        # 카드 UI 렌더링
         st.markdown(f"""
         <div style="background-color: {bg_color}; border: 3px solid {border_color}; padding: 30px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
             <h2 style="color: #333; margin: 0;">{tier_badge}</h2>
