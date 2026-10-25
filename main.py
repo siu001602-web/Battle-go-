@@ -385,7 +385,6 @@ with tab_char:
     st.markdown(f"🎟️ **보유 5성 선택권**: **{st.session_state.star5_tickets}개**")
     
     if st.session_state.star5_tickets > 0:
-        # 현재 내가 가지고 있는 5성 능력들만 골라냄
         owned_5stars = [name for name, data in st.session_state.abilities.items() if data["tier"] == "5성"]
         
         if owned_5stars:
@@ -397,7 +396,6 @@ with tab_char:
                         st.session_state.abilities[selected_owned_5star]["stars"] += 1
                         st.success(f"🎉 [{selected_owned_5star}] 성급이 1증가하여 ★({st.session_state.abilities[selected_owned_5star]['stars']})이 되었습니다!")
                     else:
-                        # 이미 5성 만렙이라면 조각으로 환급 혹은 알림
                         st.session_state.guardian_shards += 100
                         st.warning(f"⚠️ [{selected_owned_5star}] 이미 5성 만렙이므로 수호의 조각 100개로 전환되었습니다!")
                     st.rerun()
@@ -595,7 +593,7 @@ with tab_battle:
 
     else:
         # AI 배틀 모드
-        st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 AI와 겨루세요! (AI 승리 시 💎 보석 20개)")
+        st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 AI와 겨루세요! (AI 승리 시 💎 보석 100개)")
         equipped = st.session_state.get("equipped_ability")
         equipped_str = equipped if equipped else "장착된 능력 없음"
         st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped_str}`")
@@ -654,7 +652,7 @@ with tab_battle:
                 st.rerun()
 
             if st.session_state.winner == "player":
-                st.success("🎉 승리했습니다! (💎 보석 20개 획득)")
+                st.success("🎉 승리했습니다! (💎 보석 100개 획득)")
             elif st.session_state.winner == "ai":
                 st.error("💀 패배했습니다...")
             else:
@@ -840,7 +838,7 @@ with tab_battle:
                 elif st.session_state.ai_hp == 0:
                     st.session_state.game_over = True
                     st.session_state.winner = "player"
-                    st.session_state.gems += 20
+                    st.session_state.gems += 100  # <--- 이 부분이 20개에서 100개로 변경되었습니다!
                 st.rerun()
 
     st.divider()
