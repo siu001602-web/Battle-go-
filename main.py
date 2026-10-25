@@ -166,7 +166,6 @@ def start_tournament():
     st.session_state.log = "🏆 16강 토너먼트가 시작되었습니다!"
 
 def setup_next_tournament_match():
-    # 상대방 능력 및 성급 랜덤 지정 (3~5성 중 랜덤, 불사조도 토너먼트 상대로 가끔 등장 가능)
     all_flat_abilities = []
     for tier, ab_list in ABILITIES_POOL.items():
         for ab in ab_list:
@@ -645,8 +644,10 @@ with tab_battle:
             st.divider()
 
             col1, col2, col3 = st.columns(3)
-            with col1: st.metric("내 체력", render_hp(st.session_state.player_hp))
-            with col2: st.metric("현재 턴", f"{st.session_state.turn}턴")
+            with col1:
+                st.metric("내 체력", render_hp(st.session_state.player_hp))
+            with col2:
+                st.metric("현재 턴", f"{st.session_state.turn}턴")
             with col3: 
                 stun_badge = f" 💫기절중({st.session_state.ai_stunned_turns}턴)" if st.session_state.ai_stunned_turns > 0 else ""
                 st.metric("상대 체력", f"{render_hp(st.session_state.ai_hp)}{stun_badge}")
@@ -694,14 +695,25 @@ with tab_battle:
             else:
                 c1, c2, c3, c4, c5, c6 = st.columns(6)
                 player_choice = None
-                with c1: if st.button("⚔️ 공격"): player_choice = "공격"
-                with c2: if st.button("🛡️ 방어"): player_choice = "방어"
-                with c3: if st.button("💊 치료"): player_choice = "치료"
-                with c4: if st.button("⏳ 존버"): player_choice = "존버"
-                with c5: if st.button("🥊 반격"): player_choice = "반격"
+                with c1:
+                    if st.button("⚔️ 공격"):
+                        player_choice = "공격"
+                with c2:
+                    if st.button("🛡️ 방어"):
+                        player_choice = "방어"
+                with c3:
+                    if st.button("💊 치료"):
+                        player_choice = "치료"
+                with c4:
+                    if st.button("⏳ 존버"):
+                        player_choice = "존버"
+                with c5:
+                    if st.button("🥊 반격"):
+                        player_choice = "반격"
                 with c6: 
                     if st.session_state.player_ultimate >= 3:
-                        if st.button("✨ 필살기"): player_choice = "필살기"
+                        if st.button("✨ 필살기"):
+                            player_choice = "필살기"
                     else:
                         st.button("✨ 필살기", disabled=True)
 
@@ -744,8 +756,10 @@ with tab_battle:
                         st.session_state.player_hp = min(5, st.session_state.player_hp + 1)
 
                     if ai_choice not in ["기절함", "방어"] and player_choice != "방어":
-                        if ai_choice == "공격": ai_dmg = 1
-                        elif ai_choice == "필살기": ai_dmg = 3
+                        if ai_choice == "공격":
+                            ai_dmg = 1
+                        elif ai_choice == "필살기":
+                            ai_dmg = 3
 
                     st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg)
                     st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg)
@@ -917,21 +931,27 @@ with tab_battle:
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             player_choice = None
             with c1:
-                if st.button("⚔️ 공격", disabled=("공격" in banned_list)): player_choice = "공격"
+                if st.button("⚔️ 공격", disabled=("공격" in banned_list)):
+                    player_choice = "공격"
             with c2:
-                if st.button("🛡️ 방어", disabled=("방어" in banned_list)): player_choice = "방어"
+                if st.button("🛡️ 방어", disabled=("방어" in banned_list)):
+                    player_choice = "방어"
             with c3:
-                if st.button("💊 치료", disabled=("치료" in banned_list)): player_choice = "치료"
+                if st.button("💊 치료", disabled=("치료" in banned_list)):
+                    player_choice = "치료"
             with c4:
-                if st.button("⏳ 존버", disabled=("존버" in banned_list)): player_choice = "존버"
+                if st.button("⏳ 존버", disabled=("존버" in banned_list)):
+                    player_choice = "존버"
             with c5:
                 if p_cd > 0 or "반격" in banned_list:
                     st.button(f"🥊 반격({p_cd}턴)", disabled=True)
                 else:
-                    if st.button("🥊 반격"): player_choice = "반격"
+                    if st.button("🥊 반격"):
+                        player_choice = "반격"
             with c6:
                 if p_ult >= 3:
-                    if st.button("✨ 필살기"): player_choice = "필살기"
+                    if st.button("✨ 필살기"):
+                        player_choice = "필살기"
                 else:
                     st.button("✨ 필살기", disabled=True)
 
