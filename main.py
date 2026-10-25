@@ -1,7 +1,6 @@
 import streamlit as st
 import random
 import json
-import os
 
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
@@ -32,6 +31,11 @@ if "initialized" not in st.session_state:
     st.session_state.ability_shards = {}  # 개별 능력 승급용 조각
     st.session_state.equipped_ability = None
     st.session_state.banned_action = None
+    
+    # 뽑기 결과 카드 넘기기용 세션 상태
+    st.session_state.gacha_results = []
+    st.session_state.gacha_index = 0
+    st.session_state.is_gacha_open = False
     
     st.session_state.initialized = True
 
@@ -101,36 +105,6 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 화면을 덮는 컷씬 모달 팝업 정의 (안전 장치 포함)
-@st.dialog("🌟 스페셜 컷씬 발동!", width="large")
-def show_gacha_cutscene(highest_tier, result_summary_text):
-    if highest_tier == "5성":
-        st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 컷씬]")
-        video_path = "1000000778.mp4"
-        if os.path.exists(video_path):
-            with open(video_path, "rb") as f:
-                video_bytes = f.read()
-            st.video(video_bytes, format="video/mp4", autoplay=True)
-        else:
-            st.info("🎥 [황금빛 문이 열리는 컷씬 재생 중... (영상 파일이 없으면 이 메시지가 나옵니다)]")
-        st.balloons()
-        
-    elif highest_tier == "4성":
-        st.markdown("### 💜✨ [4성 특급 등장! 보라빛 컷씬]")
-        video_path = "1000000777.mp4"
-        if os.path.exists(video_path):
-            with open(video_path, "rb") as f:
-                video_bytes = f.read()
-            st.video(video_bytes, format="video/mp4", autoplay=True)
-        else:
-            st.info("🎥 [보라빛 문이 열리는 컷씬 재생 중... (영상 파일이 없으면 이 메시지가 나옵니다)]")
-            
-    st.divider()
-    st.write(result_summary_text)
-    
-    if st.button("확인 및 닫기"):
-        st.rerun()
-
 # 스마트 AI 선택 로직
 def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
     if ai_ultimate >= 3 and random.random() < 0.7:
@@ -166,9 +140,9 @@ with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
     **📋 [뽑기 규칙 및 보상 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (황금빛 화면 컷씬 팝업)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 화면 컷씬 팝업)
-    * 🔹 **3성 (검투사)** : **94.9%** (일반 결과)
+    * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라색 배경 카드)
+    * 🔹 **3성 (검투사)** : **94.9%** (파란색 배경 카드)
     * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 자동으로 수호의 조각(`4성 +10개`, `5성 +100개`)으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
@@ -180,27 +154,77 @@ with tab_gacha:
     with col_guard:
         st.metric("보유 수호의 조각", f"🛡️ {st.session_state.guardian_shards}개")
     
+    # 뽑기 결과 카드 뒤집기 화면 (모달 팝업 형태)
+    if st.session_state.is_gacha_open:
+        st.divider()
+        st.markdown("### 🎴 뽑기 결과 확인 (카드를 넘겨보세요!)")
+        
+        idx = st.session_state.gacha_index
+        total = len(st.session_state.gacha_results)
+        item = st.session_state.gacha_results[idx]
+        
+        tier = item["tier"]
+        name = item["name"]
+        is_dup = item["is_duplicate"]
+        
+        # 등급별 배경 스타일 및 이모지 설정
+        if tier == "5성":
+            bg_color = "#FFF3CD"  # 연한 노란색
+            border_color = "#FFC107"
+            tier_badge = "🌟 [5성 대박]"
+            if tier == "5성":
+                st.balloons()
+        elif tier == "4성":
+            bg_color = "#E2D9F3"  # 연한 보라색
+            border_color = "#6F42C1"
+            tier_badge = "✨ [4성 특급]"
+        else:
+            bg_color = "#D1ECF1"  # 연한 파란색
+            border_color = "#17A2B8"
+            tier_badge = "🔹 [3성 일반]"
+            
+        dup_text = "🔄 (이미 보유 중 - 조각/전환 적용)" if is_dup else "🎉 (신규 획득!)"
+        
+        # 카드 UI 렌더링
+        st.markdown(f"""
+        <div style="background-color: {bg_color}; border: 3px solid {border_color}; padding: 30px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
+            <h2 style="color: #333; margin: 0;">{tier_badge}</h2>
+            <h1 style="color: #111; margin: 15px 0;">{name}</h1>
+            <p style="font-size: 16px; color: #555; font-weight: bold;">{dup_text}</p>
+            <p style="color: #777; margin-top: 15px;">카드 {idx + 1} / {total}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        c_prev, c_next, c_close = st.columns(3)
+        with c_prev:
+            if idx > 0:
+                if st.button("◀ 이전 카드"):
+                    st.session_state.gacha_index -= 1
+                    st.rerun()
+        with c_next:
+            if idx < total - 1:
+                if st.button("다음 카드 ▶"):
+                    st.session_state.gacha_index += 1
+                    st.rerun()
+        with c_close:
+            if st.button("❌ 결과창 닫기"):
+                st.session_state.is_gacha_open = False
+                st.session_state.gacha_results = []
+                st.session_state.gacha_index = 0
+                st.rerun()
+                
+        st.divider()
+
     g_col1, g_col2 = st.columns(2)
     with g_col1:
         if st.button("🎲 1회 뽑기 (보석 100개)"):
             if st.session_state.gems >= 100:
                 st.session_state.gems -= 100
                 res = roll_single_item()
-                
-                tier = res["tier"]
-                name = res["name"]
-                is_dup = res["is_duplicate"]
-                
-                status_str = "🔄 (보유 중)" if is_dup else "✨ (신규 획득)"
-                summary_text = f"획득 결과: **[{tier}] {name}** {status_str}"
-                
-                if tier in ["4성", "5성"]:
-                    show_gacha_cutscene(tier, summary_text)
-                else:
-                    if is_dup:
-                        st.warning(f"🔄 이미 보유 중인 능력입니다: [{tier}] {name}")
-                    else:
-                        st.success(f"🔹 [일반] 신규 3성 능력 획득: {name}")
+                st.session_state.gacha_results = [res]
+                st.session_state.gacha_index = 0
+                st.session_state.is_gacha_open = True
+                st.rerun()
             else:
                 st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
                 
@@ -230,23 +254,10 @@ with tab_gacha:
                             
                     results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup}
                 
-                highest_tier = "3성"
-                if any(r["tier"] == "5성" for r in results):
-                    highest_tier = "5성"
-                elif any(r["tier"] == "4성" for r in results):
-                    highest_tier = "4성"
-                    
-                summary_lines = []
-                for r in results:
-                    prefix = "🔄" if r["is_duplicate"] else "🌟" if r["tier"] in ["4성", "5성"] else "🔹"
-                    summary_lines.append(f"{prefix} **[{r['tier']}]** {r['name']}")
-                full_summary = "\n".join(summary_lines)
-                
-                if highest_tier in ["4성", "5성"]:
-                    show_gacha_cutscene(highest_tier, full_summary)
-                else:
-                    st.success("📦 10연차 뽑기 완료!")
-                    st.markdown(full_summary)
+                st.session_state.gacha_results = results
+                st.session_state.gacha_index = 0
+                st.session_state.is_gacha_open = True
+                st.rerun()
             else:
                 st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
 
