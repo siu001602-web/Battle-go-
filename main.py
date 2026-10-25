@@ -64,6 +64,7 @@ if "initialized" not in st.session_state:
     st.session_state.ability_shards = {}   # 개별 능력 승급용 조각
     st.session_state.equipped_ability = None
     st.session_state.banned_actions = []
+    st.session_state.ai_stunned_turns = 0  # AI 기절 남은 턴 수 추적
     
     # 뽑기 및 천장 시스템 상태
     st.session_state.pity_counter = 0      # 일반뽑 5성 미획득 카운트
@@ -108,8 +109,10 @@ if "pvp_role" not in st.session_state:
     st.session_state.pvp_role = None
 if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
+if "ai_stunned_turns" not in st.session_state:
+    st.session_state.ai_stunned_turns = 0
 
-# 등급별 능력 풀 정의
+# 등급별 능력 풀 정의 (타임머신 5성 추가)
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -120,7 +123,8 @@ ABILITIES_POOL = {
     ],
     "5성": [
         "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)",
-        "🔥 불사조 (궁극기: 성급별 부활 효과)"
+        "🔥 불사조 (궁극기: 성급별 부활 효과)",
+        "⏳ 타임머신 (필살기 사용 시 성급별 확률로 상대방 기절)"
     ]
 }
 
@@ -140,6 +144,7 @@ def reset_game():
     st.session_state.winner = None
     st.session_state.player_history = []
     st.session_state.banned_actions = []
+    st.session_state.ai_stunned_turns = 0
     st.session_state.phoenix_revive_active = False
     st.session_state.phoenix_revive_turn = 0
     st.session_state.log = "게임이 초기화되었습니다. 다시 시작하세요!"
@@ -185,7 +190,7 @@ def roll_single_item(is_guaranteed_4star=False):
             
     if tier == "5성":
         st.session_state.pity_counter = 0
-        name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+        name = random.choice(ABILITIES_POOL["5성"])
     elif tier == "4성":
         name = random.choice(ABILITIES_POOL["4성"])
     else:
@@ -213,10 +218,9 @@ def roll_pickup_item(is_guaranteed_4star=False):
             name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
             st.session_state.guaranteed_pickup = False
         else:
-            if random.random() < 0.5:
-                name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
-            else:
-                name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
+            # 5성 풀(광대, 불사조, 타임머신) 중 랜덤 픽업 로직
+            name = random.choice(ABILITIES_POOL["5성"])
+            if name != "🔥 불사조 (궁극기: 성급별 부활 효과)":
                 st.session_state.guaranteed_pickup = True
     else:
         if is_guaranteed_4star:
@@ -269,7 +273,6 @@ with tab_save:
     st.write("핸드폰이나 다른 기기에서도 데이터를 백업하고 불러올 수 있습니다.")
     st.divider()
 
-    # 1. 파일로 내보내기 (핸드폰/PC 겸용 백업 파일 다운로드)
     json_data_str = save_game_data()
     st.download_button(
         label="📥 백업 파일 다운로드 (스마트폰 저장용)",
@@ -281,7 +284,6 @@ with tab_save:
 
     st.divider()
 
-    # 2. 파일로 불러오기 (핸드폰/PC 겸용 백업 파일 업로드)
     uploaded_file = st.file_uploader("📤 백업 파일 업로드 (데이터 복구)", type=["json"])
     if uploaded_file is not None:
         try:
@@ -296,7 +298,6 @@ with tab_save:
 
     st.divider()
 
-    # 3. 텍스트 코드로 복사/붙여넣기 (간편 백업용)
     st.markdown("### 📋 수동 세이브 코드 (텍스트 복사/붙여넣기)")
     st.text_area("아래 코드를 복사해서 메모장에 보관하거나 붙여넣으세요.", value=json_data_str, height=150, key="save_code_area")
     
@@ -313,23 +314,23 @@ with tab_save:
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기샵")
-    banner_type = st.radio("뽑기 배너를 선택하세요", ["🔥 불사조 전용 픽업 뽑기", "✨ 일반 능력 뽑기"], horizontal=True)
+    banner_type = st.radio("뽑기 배너를 선택하세요", ["🔥 불사조 & 신규 픽업 뽑기", "✨ 일반 능력 뽑기"], horizontal=True)
     
     if "불사조" in banner_type:
         pity_left_p = 100 - st.session_state.pickup_pity
-        guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 불사조!]" if st.session_state.guaranteed_pickup else "🎲 [50:50 확률 적용 중]"
+        guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 확정!]" if st.session_state.guaranteed_pickup else "🎲 [확률 적용 중]"
         st.info(f"""
-        **🔥 [불사조 전용 픽업 규칙]**
-        * 🌟 **5성 등장 확률**: **0.3%** (50% 확률 불사조 / 50% 확률 광대 픽뚫)
+        **🔥 [픽업 배너 규칙]**
+        * 🌟 **5성 등장 확률**: **0.3%**
         * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
-        * 🛡️ **천장 시스템**: 100회 내 5성 미등장 시 확정! (픽뚫 시 다음 5성 불사조 확정)
+        * 🛡️ **천장 시스템**: 100회 내 5성 미등장 시 확정!
         * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
         """)
     else:
         pity_left = 100 - st.session_state.pity_counter
         st.info(f"""
         **📋 [일반 뽑기 규칙]**
-        * 🌟 **5성 (광대)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
+        * 🌟 **5성 (광대, 불사조, 타임머신)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
         * ✨ **10연차 혜택**: **10뽑당 4성 이상 1개 확정!**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
@@ -391,10 +392,6 @@ with tab_gacha:
                 <p style="color: #777; font-size: 12px; margin-top: 8px;">카드 {idx + 1} / {total}</p>
             </div>
             """, unsafe_allow_html=True)
-            
-            if "광대" in name:
-                if os.path.exists("1000000779.png"):
-                    st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
             
             c_prev, c_next, c_close = st.columns(3)
             with c_prev:
@@ -458,7 +455,6 @@ with tab_char:
     st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다.")
     st.divider()
 
-    # --- 🎒 내 배낭 (인벤토리) 시스템 ---
     st.subheader("🎒 내 배낭 (인벤토리)")
     st.markdown(f"🎟️ **보유 5성 선택권**: **{st.session_state.star5_tickets}개**")
     
@@ -478,9 +474,9 @@ with tab_char:
                         st.warning(f"⚠️ [{selected_owned_5star}] 이미 5성 만렙이므로 수호의 조각 100개로 전환되었습니다!")
                     st.rerun()
         else:
-            st.info("💡 현재 보유 중인 5성 능력이 없습니다. 5성 능력을 먼저 획득해 보세요!")
+            st.info("💡 현재 보유 중인 5성 능력이 없습니다.")
     else:
-        st.caption("보유 중인 5성 선택권이 없습니다. (수호의 조각 상점에서 교환 가능)")
+        st.caption("보유 중인 5성 선택권이 없습니다.")
     
     st.divider()
 
@@ -494,25 +490,14 @@ with tab_char:
             with c_col1:
                 st.markdown(f"**[{data['tier']}] {name}** (`{star_display}` {stars}/5성)")
                 if "광대" in name:
-                    clown_map = {
-                        0: "65% 상대 피 -3 / 35% 본인 피 -2",
-                        1: "70% 상대 피 -3 / 30% 본인 피 -2",
-                        2: "70% 상대 피 -3 / 30% 본인 피 -1",
-                        3: "75% 상대 피 -3 / 25% 본인 피 -1",
-                        4: "80% 상대 피 -3 / 20% 본인 피 -1",
-                        5: "80% 상대 피 -3 / 20% 본인 피 -1"
-                    }
+                    clown_map = {0: "65% 상대 피 -3 / 35% 본인 피 -2", 1: "70% 상대 피 -3 / 30% 본인 피 -2", 2: "70% 상대 피 -3 / 30% 본인 피 -1", 3: "75% 상대 피 -3 / 25% 본인 피 -1", 4: "80% 상대 피 -3 / 20% 본인 피 -1", 5: "80% 상대 피 -3 / 20% 본인 피 -1"}
                     st.caption(f"🤡 효과: {clown_map.get(stars)}")
                 elif "불사조" in name:
-                    phoenix_map = {
-                        0: "2턴 내 사망 시 72.5% 부활",
-                        1: "2턴 내 사망 시 75.0% 부활",
-                        2: "3턴 내 사망 시 77.5% 부활",
-                        3: "3턴 내 사망 시 80.0% 부활",
-                        4: "4턴 내 사망 시 80.0% 부활",
-                        5: "4턴 내 사망 시 80.0% 부활"
-                    }
+                    phoenix_map = {0: "2턴 내 사망 시 72.5% 부활", 1: "2턴 내 사망 시 75.0% 부활", 2: "3턴 내 사망 시 77.5% 부활", 3: "3턴 내 사망 시 80.0% 부활", 4: "4턴 내 사망 시 80.0% 부활", 5: "4턴 내 사망 시 80.0% 부활"}
                     st.caption(f"🔥 효과: {phoenix_map.get(stars)}")
+                elif "타임머신" in name:
+                    time_map = {0: "60% 확률로 1턴 기절", 1: "65% 확률로 1턴 기절", 2: "70% 확률로 1턴 기절", 3: "75% 확률로 1턴 기절", 4: "80% 확률로 1턴 기절", 5: "80% 확률로 2턴 기절"}
+                    st.caption(f"⏳ 효과: {time_map.get(stars)}")
                 else:
                     st.caption("✨ 성급별 전투 강화 효과 적용 중")
                 st.text(f"보유 조각: {shards}개 (필요: 1개)")
@@ -553,7 +538,7 @@ with tab_char:
                 st.success("✨ 다이아 100개 교환 성공!")
                 st.rerun()
             else:
-                st.error("수호의 조각이 부족합니다! (필요: 10개)")
+                st.error("수호의 조각이 부족합니다!")
                 
     with shop_col2:
         st.markdown("🎟️ **5성 선택권 교환**\n* 수호의 조각 300개 ➡️ 5성 선택권 1개")
@@ -564,7 +549,7 @@ with tab_char:
                 st.success("🎉 5성 선택권 1개 교환 성공!")
                 st.rerun()
             else:
-                st.error("수호의 조각이 부족합니다! (필요: 300개)")
+                st.error("수호의 조각이 부족합니다!")
 
     st.divider()
     st.subheader("🔑 비밀 제작자 코드")
@@ -696,7 +681,8 @@ with tab_battle:
         with col3:
             ai_buff_text = f" 🔥버프({ai_wait}턴)" if ai_wait > 0 else ""
             ai_ult_status = "✨ [사용 가능!]" if ai_ult >= 3 else f"✨ 충전중({ai_ult}/3)"
-            st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}\n{ai_ult_status}")
+            stun_badge = f" 💫기절중({st.session_state.ai_stunned_turns}턴)" if st.session_state.ai_stunned_turns > 0 else ""
+            st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}{stun_badge}\n{ai_ult_status}")
 
         st.divider()
 
@@ -775,7 +761,13 @@ with tab_battle:
                 if len(st.session_state.player_history) > 5:
                     st.session_state.player_history.pop(0)
 
-                ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+                # AI 기절 상태 확인
+                if st.session_state.ai_stunned_turns > 0:
+                    ai_choice = "기절함"
+                    st.session_state.ai_stunned_turns -= 1
+                else:
+                    ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+
                 base_damage = 2 if st.session_state.turn >= 10 else 1
                 log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
                 
@@ -835,10 +827,8 @@ with tab_battle:
                         elif "광대" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             clown_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
-                            
                             prob_table = {0: 0.65, 1: 0.70, 2: 0.70, 3: 0.75, 4: 0.80, 5: 0.80}
                             self_damage_table = {0: 2, 1: 2, 2: 1, 3: 1, 4: 1, 5: 1}
-                            
                             success_p = prob_table.get(clown_stars, 0.80)
                             self_dmg = self_damage_table.get(clown_stars, 1)
                             
@@ -848,6 +838,21 @@ with tab_battle:
                             else:
                                 st.session_state.player_hp = max(0, st.session_state.player_hp - self_dmg)
                                 log_message += f"🤡 [광대 역관광!] 본인 피 -{self_dmg}! (확률 실패)\n"
+                        elif "타임머신" in eq:
+                            raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                            t_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                            
+                            t_prob_map = {0: 0.60, 1: 0.65, 2: 0.70, 3: 0.75, 4: 0.80, 5: 0.80}
+                            t_dur_map = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 2}
+                            
+                            t_prob = t_prob_map.get(t_stars, 0.60)
+                            t_dur = t_dur_map.get(t_stars, 1)
+                            
+                            if random.random() < t_prob:
+                                st.session_state.ai_stunned_turns = t_dur
+                                log_message += f"⏳ [타임머신 발동!] {int(t_prob*100)}% 확률 성공! 상대방이 {t_dur}턴 동안 기절합니다!\n"
+                            else:
+                                log_message += f"⏳ [타임머신 실패] 기절 효과가 발동하지 않았습니다.\n"
 
                 elif player_choice == "공격":
                     if is_player_exhausted:
@@ -883,8 +888,10 @@ with tab_battle:
                         p_dmg_deal += base_damage + 1
                         log_message += "🥊 완벽한 반격 성공!\n"
 
-                # AI 행동 처리
-                if ai_choice == "필살기":
+                # AI 행동 처리 (기절 상태가 아닐 때만 정상 수행)
+                if ai_choice == "기절함":
+                    log_message += "💫 상대방이 기절하여 아무 행동도 하지 못했습니다!\n"
+                elif ai_choice == "필살기":
                     st.session_state.ai_ultimate = 0
                     ai_dmg_deal += 3
                     log_message += "✨ [상대 필살기 작렬!]\n"
@@ -921,4 +928,3 @@ with tab_battle:
     st.divider()
     st.subheader("📜 이번 턴 기록")
     st.info(st.session_state.get("log", "게임을 시작해주세요!"))
-
