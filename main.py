@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (만렙 초과 시 백그라운드 자동 전환, 불필요한 텍스트 표기 생략)
+# 단일 뽑기 로직 (만렙 초과 시 백그라운드 자동 수호의 조각 전환)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -100,22 +100,22 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 화면을 덮는 컷씬 모달 팝업 정의
+# 화면을 덮는 컷씬 모달 팝업 정의 (지정된 비디오 파일 자동 재생)
 @st.dialog("🌟 스페셜 컷씬 발동!", width="large")
 def show_gacha_cutscene(highest_tier, result_summary_text):
     if highest_tier == "5성":
-        st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 문 & 별 반짝임 컷씬]")
+        st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 컷씬]")
         try:
-            st.video("1000000778.mp4")
+            st.video("1000000778.mp4", autoplay=True)
         except:
-            st.write("황금빛 영상 재생 불가 (파일 경로를 확인해주세요)")
+            st.write("황금빛 영상(1000000778.mp4)을 불러올 수 없습니다. 경로를 확인해주세요.")
         st.balloons()
     elif highest_tier == "4성":
-        st.markdown("### 💜✨ [4성 특급 등장! 보라빛 문 & 별 반짝임 컷씬]")
+        st.markdown("### 💜✨ [4성 특급 등장! 보라빛 컷씬]")
         try:
-            st.video("1000000777.mp4")
+            st.video("1000000777.mp4", autoplay=True)
         except:
-            st.write("보라빛 영상 재생 불가 (파일 경로를 확인해주세요)")
+            st.write("보라빛 영상(1000000777.mp4)을 불러올 수 없습니다. 경로를 확인해주세요.")
             
     st.divider()
     st.write(result_summary_text)
@@ -158,8 +158,8 @@ with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
     **📋 [뽑기 규칙 및 보상 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (황금빛 화면 덮는 컷씬 팝업)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 화면 덮는 컷씬 팝업)
+    * 🌟 **5성 (광대)** : **0.1%** (황금빛 화면 컷씬 팝업)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 화면 컷씬 팝업)
     * 🔹 **3성 (검투사)** : **94.9%** (일반 결과)
     * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 자동으로 수호의 조각(`4성 +10개`, `5성 +100개`)으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
@@ -600,7 +600,7 @@ with tab_battle:
                     log_message += "▶ 상대의 공격을 반격하여 무효화했습니다!\n"
                 else:
                     ai_has_buff = st.session_state.ai_wait_turns > 0
-                    ai_dmg_deal += base_database * (2 if ai_has_buff else 1) if 'base_database' in locals() else base_damage * (2 if ai_has_buff else 1)
+                    ai_dmg_deal += base_damage * (2 if ai_has_buff else 1)
                     log_message += f"▶ 상대의 공격 명중! 당신이 {ai_dmg_deal}의 대미지를 입었습니다."
                     if ai_has_buff:
                         log_message += " (상대 존버 버프 사용!)\n"
