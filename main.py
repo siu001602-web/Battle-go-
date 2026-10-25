@@ -331,8 +331,7 @@ with tab_char:
     st.write("제작자 코드를 입력하여 보석을 획득하세요.")
     creator_code_input = st.text_input("제작자 코드를 입력하세요", type="password")
     if st.button("코드 제출 및 보상 수령"):
-        # 비밀 제작자 코드 ("admin1234" 입력 시 보석 5000개 지급 - 원하시는 대로 변경 가능)
-        if creator_code_input == "admin1234":
+        if creator_code_input == "siu0925":
             st.session_state.gems += 5000
             st.success("🎉 [제작자 인증 성공!] 보석 5,000개가 지급되었습니다!")
             st.rerun()
@@ -343,7 +342,6 @@ with tab_char:
     st.subheader("💾 게임 기록 저장 및 복구 (업데이트 대비 백업)")
     st.write("앱 업데이트나 브라우저 초기화 대비 내 게임 데이터를 백업하고 불러올 수 있습니다.")
 
-    # 백업 데이터 만들기 (JSON 직렬화)
     game_data = {
         "gems": st.session_state.gems,
         "guardian_shards": st.session_state.guardian_shards,
@@ -360,7 +358,6 @@ with tab_char:
         mime="application/json"
     )
 
-    # 업로드(불러오기) 기능
     uploaded_file = st.file_uploader("📤 백업한 게임 기록 파일 불러오기", type=["json"])
     if uploaded_file is not None:
         try:
