@@ -1,6 +1,7 @@
 import streamlit as st
 import random
 import json
+import os
 
 # 페이지 설정
 st.set_page_config(page_title="심리전 턴제 배틀 & 능력 시스템", page_icon="🎮", layout="centered")
@@ -205,6 +206,13 @@ with tab_gacha:
             <p style="color: #777; margin-top: 15px;">카드 {idx + 1} / {total}</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        # 5성 광대가 떴을 때 일러스트 이미지 출력
+        if "광대" in name:
+            if os.path.exists("1000000779.png"):
+                st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
+            else:
+                st.warning("⚠️ '1000000779.png' 이미지 파일이 main.py와 같은 폴더에 없습니다!")
         
         c_prev, c_next, c_close = st.columns(3)
         with c_prev:
