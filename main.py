@@ -85,6 +85,12 @@ if "initialized" not in st.session_state:
     st.session_state.room_id = ""
     st.session_state.pvp_rooms = {}
     st.session_state.pvp_role = None
+
+    # 토너먼트 관련 상태
+    st.session_state.is_tournament = False
+    st.session_state.tournament_stage = None  # "16강", "8강", "4강", "결승"
+    st.session_state.tournament_ai_ability = None
+    st.session_state.tournament_ai_stars = 0
     
     st.session_state.initialized = True
 
@@ -111,6 +117,10 @@ if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
 if "ai_stunned_turns" not in st.session_state:
     st.session_state.ai_stunned_turns = 0
+if "is_tournament" not in st.session_state:
+    st.session_state.is_tournament = False
+if "tournament_stage" not in st.session_state:
+    st.session_state.tournament_stage = None
 
 # 등급별 능력 풀 정의 (일반 뽑기용 5성: 광대, 타임머신)
 ABILITIES_POOL = {
@@ -147,6 +157,25 @@ def reset_game():
     st.session_state.phoenix_revive_active = False
     st.session_state.phoenix_revive_turn = 0
     st.session_state.log = "게임이 초기화되었습니다. 다시 시작하세요!"
+
+def start_tournament():
+    st.session_state.is_tournament = True
+    st.session_state.tournament_stage = "16강"
+    setup_next_tournament_match()
+    reset_game()
+    st.session_state.log = "🏆 16강 토너먼트가 시작되었습니다!"
+
+def setup_next_tournament_match():
+    # 상대방 능력 및 성급 랜덤 지정 (3~5성 중 랜덤, 불사조도 토너먼트 상대로 가끔 등장 가능)
+    all_flat_abilities = []
+    for tier, ab_list in ABILITIES_POOL.items():
+        for ab in ab_list:
+            all_flat_abilities.append((tier, ab))
+    all_flat_abilities.append(("5성", "🔥 불사조 (궁극기: 성급별 부활 효과)"))
+    
+    chosen_tier, chosen_ab = random.choice(all_flat_abilities)
+    st.session_state.tournament_ai_ability = f"[{chosen_tier}] {chosen_ab}"
+    st.session_state.tournament_ai_stars = random.randint(0, 5)
 
 def render_hp(current_hp, max_hp=5):
     red_hearts = "❤️" * current_hp
@@ -575,16 +604,164 @@ with tab_char:
 
 with tab_battle:
     st.subheader("⚔️ 배틀 모드 선택")
-    mode = st.radio("모드를 선택하세요", ["🤖 AI 배틀", "👥 플레이어 대결 (방 만들기/입장)"], horizontal=True)
+    mode = st.radio("모드를 선택하세요", ["🤖 AI 배틀", "🏆 토너먼트 모드 (16강~결승)", "👥 플레이어 대결 (방 만들기/입장)"], horizontal=True)
     
-    if "AI" in mode:
+    if "AI 배틀" in mode:
         st.session_state.game_mode = "AI 배틀"
+        st.session_state.is_tournament = False
+    elif "토너먼트" in mode:
+        st.session_state.game_mode = "토너먼트 모드"
     else:
         st.session_state.game_mode = "플레이어 대결"
+        st.session_state.is_tournament = False
         
     st.divider()
 
-    if st.session_state.game_mode == "플레이어 대결":
+    if st.session_state.game_mode == "토너먼트 모드":
+        if not st.session_state.is_tournament:
+            st.markdown("""
+            ### 🏆 16강 토너먼트 모드
+            * **진행 순서**: 16강 ➡️ 8강 ➡️ 4강(준결승) ➡️ 결승
+            * **규칙**: 매 경기 상대방의 능력과 성급이 **랜덤**으로 선정됩니다.
+            * **보상**: 
+              * 🥇 **1등 (우승)**: **다이아 1,000개**
+              * 🥈 **2등 (준우승)**: **다이아 500개**
+              * ❌ **그 외 탈락 시**: **보상 없음**
+            """)
+            if st.button("🚀 토너먼트 도전하기"):
+                start_tournament()
+                st.rerun()
+        else:
+            stage = st.session_state.tournament_stage
+            st.markdown(f"### 🏟️ 현재 스테이지: **{stage}**")
+            
+            equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
+            ai_star_disp = "★" * st.session_state.tournament_ai_stars + "☆" * (5 - st.session_state.tournament_ai_stars)
+            
+            st.info(f"""
+            * 🛡️ **내 장착 능력**: `{equipped}`
+            * 🤖 **상대방 능력**: `{st.session_state.tournament_ai_ability}` (`{ai_star_disp}`)
+            """)
+            st.divider()
+
+            col1, col2, col3 = st.columns(3)
+            with col1: st.metric("내 체력", render_hp(st.session_state.player_hp))
+            with col2: st.metric("현재 턴", f"{st.session_state.turn}턴")
+            with col3: 
+                stun_badge = f" 💫기절중({st.session_state.ai_stunned_turns}턴)" if st.session_state.ai_stunned_turns > 0 else ""
+                st.metric("상대 체력", f"{render_hp(st.session_state.ai_hp)}{stun_badge}")
+
+            if st.session_state.game_over:
+                if st.session_state.winner == "player":
+                    if stage == "16강":
+                        st.success("🎉 16강 승리! 다음은 8강전입니다.")
+                        if st.button("8강전 진행하기"):
+                            st.session_state.tournament_stage = "8강"
+                            setup_next_tournament_match()
+                            reset_game()
+                            st.rerun()
+                    elif stage == "8강":
+                        st.success("🎉 8강 승리! 준결승(4강) 진출!")
+                        if st.button("준결승 진행하기"):
+                            st.session_state.tournament_stage = "4강"
+                            setup_next_tournament_match()
+                            reset_game()
+                            st.rerun()
+                    elif stage == "4강":
+                        st.success("🎉 준결승 승리! 대망의 결승전 진출! (최소 준우승 확보: 💎 다이아 500개 확정!)")
+                        if st.button("결승전 진행하기"):
+                            st.session_state.tournament_stage = "결승"
+                            setup_next_tournament_match()
+                            reset_game()
+                            st.rerun()
+                    elif stage == "결승":
+                        st.balloons()
+                        st.success("👑 토너먼트 우승! 💎 다이아 1,000개가 지급되었습니다!")
+                        st.session_state.gems += 1000
+                        st.session_state.is_tournament = False
+                        if st.button("토너먼트 로비로 돌아가기"):
+                            st.rerun()
+                else:
+                    if stage == "결승":
+                        st.error("🥈 준우승하셨습니다! 보상으로 💎 다이아 500개가 지급됩니다!")
+                        st.session_state.gems += 500
+                    else:
+                        st.error(f"💀 {stage}에서 탈락하셨습니다... 보상이 없습니다.")
+                    
+                    st.session_state.is_tournament = False
+                    if st.button("토너먼트 재도전하기"):
+                        st.rerun()
+            else:
+                c1, c2, c3, c4, c5, c6 = st.columns(6)
+                player_choice = None
+                with c1: if st.button("⚔️ 공격"): player_choice = "공격"
+                with c2: if st.button("🛡️ 방어"): player_choice = "방어"
+                with c3: if st.button("💊 치료"): player_choice = "치료"
+                with c4: if st.button("⏳ 존버"): player_choice = "존버"
+                with c5: if st.button("🥊 반격"): player_choice = "반격"
+                with c6: 
+                    if st.session_state.player_ultimate >= 3:
+                        if st.button("✨ 필살기"): player_choice = "필살기"
+                    else:
+                        st.button("✨ 필살기", disabled=True)
+
+                if player_choice:
+                    if st.session_state.ai_stunned_turns > 0:
+                        ai_choice = "기절함"
+                        st.session_state.ai_stunned_turns -= 1
+                    else:
+                        ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+
+                    log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
+                    p_dmg, ai_dmg = 0, 0
+
+                    if player_choice == "필살기":
+                        st.session_state.player_ultimate = 0
+                        p_dmg = 3
+                        log_message += "✨ [필살기 작렬!] 대미지 3 부여!\n"
+                        
+                        eq = st.session_state.get("equipped_ability")
+                        if eq and "타임머신" in eq:
+                            t_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
+                            t_prob = {0: 0.60, 1: 0.65, 2: 0.70, 3: 0.75, 4: 0.80, 5: 0.80}.get(t_stars, 0.60)
+                            t_dur = {0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 2}.get(t_stars, 1)
+                            if random.random() < t_prob:
+                                st.session_state.ai_stunned_turns = t_dur
+                                log_message += f"⏳ [타임머신 성공] 상대방 {t_dur}턴 기절!\n"
+                        elif eq and "광대" in eq:
+                            c_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
+                            c_prob = {0: 0.65, 1: 0.70, 2: 0.70, 3: 0.75, 4: 0.80, 5: 0.80}.get(c_stars, 0.80)
+                            if random.random() < c_prob:
+                                p_dmg += 3
+                                log_message += "🤡 [광대 대박] 상대 피 추가 -3!\n"
+                            else:
+                                st.session_state.player_hp = max(0, st.session_state.player_hp - 1)
+                                log_message += "🤡 [광대 실패] 본인 피 -1!\n"
+
+                    elif player_choice == "공격" and ai_choice != "방어":
+                        p_dmg = 1
+                    elif player_choice == "치료" and ai_choice != "공격":
+                        st.session_state.player_hp = min(5, st.session_state.player_hp + 1)
+
+                    if ai_choice not in ["기절함", "방어"] and player_choice != "방어":
+                        if ai_choice == "공격": ai_dmg = 1
+                        elif ai_choice == "필살기": ai_dmg = 3
+
+                    st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg)
+                    st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg)
+                    st.session_state.turn += 1
+                    st.session_state.player_ultimate = min(3, st.session_state.player_ultimate + 1)
+                    st.session_state.log = log_message
+
+                    if st.session_state.player_hp == 0 or st.session_state.ai_hp == 0:
+                        st.session_state.game_over = True
+                        st.session_state.winner = "player" if st.session_state.ai_hp == 0 else "ai"
+                    st.rerun()
+
+        st.divider()
+        st.info(st.session_state.get("log", "토너먼트를 진행하세요!"))
+
+    elif st.session_state.game_mode == "플레이어 대결":
         st.markdown("### 🌐 플레이어 멀티 대결 로비")
         col_r1, col_r2 = st.columns(2)
         with col_r1:
@@ -660,7 +837,7 @@ with tab_battle:
             st.write("방 번호를 입력하고 입장하세요.")
 
     else:
-        # AI 배틀 모드
+        # 일반 AI 배틀 모드
         st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 AI와 겨루세요! (AI 승리 시 💎 보석 100개)")
         equipped = st.session_state.get("equipped_ability")
         equipped_str = equipped if equipped else "장착된 능력 없음"
