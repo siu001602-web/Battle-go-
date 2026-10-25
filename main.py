@@ -1,6 +1,5 @@
 import streamlit as st
 import random
-import json
 import os
 
 # 페이지 설정
@@ -390,11 +389,9 @@ with tab_char:
                 tier = "5성"
                 
                 if name in st.session_state.abilities:
-                    # 이미 보유 중이면 조각 1개 지급 -> 승급하기 편하게 처리
                     st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
                     st.success(f"🎉 [{name}] 이미 보유 중이므로 승급 조각 1개가 충전되었습니다!")
                 else:
-                    # 신규 획득 (0성)
                     st.session_state.abilities[name] = {"tier": tier, "stars": 0}
                     st.session_state.ability_shards[name] = 0
                     st.success(f"🎉 [{name}] 신규 획득 완료!")
@@ -661,7 +658,7 @@ with tab_battle:
             st.subheader("행동을 선택하세요")
             banned_list = st.session_state.get("banned_actions", [])
             if banned_list:
-                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다[span_0](start_span)[span_0](end_span)!")
+                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
 
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             player_choice = None
@@ -739,7 +736,7 @@ with tab_battle:
                             heal_amount = 4 if healer_stars >= 5 else 3
                             if random.random() < healer_success_prob:
                                 st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
-                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복[span_1](start_span)[span_1](end_span)!\n"
+                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복!\n"
                         elif "경찰" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
@@ -749,7 +746,7 @@ with tab_battle:
                             if random.random() < cop_success_prob:
                                 banned = random.sample(["공격", "방어", "치료", "존버", "반격"], min(ban_count, 5))
                                 st.session_state.banned_actions = banned
-                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴[span_2](start_span)[span_2](end_span)!\n"
+                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴!\n"
                         elif "광대" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             clown_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
