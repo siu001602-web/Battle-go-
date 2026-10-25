@@ -75,7 +75,7 @@ if "pvp_role" not in st.session_state:
 if "equipped_ability" not in st.session_state:
     st.session_state.equipped_ability = None
 
-# 등급별 능력 풀 정의 (일반뽑용)
+# 등급별 능력 풀 정의 (정확하게 성급 분리)
 ABILITIES_POOL = {
     "3성": [
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
@@ -114,7 +114,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 일반 뽑기 로직 (5성 확률 0.3% 적용)
+# 일반 뽑기 로직 (티어별 정확한 풀 매칭)
 def roll_single_item():
     st.session_state.pity_counter += 1
     if st.session_state.pity_counter >= 100:
@@ -131,8 +131,11 @@ def roll_single_item():
             
     if tier == "5성":
         st.session_state.pity_counter = 0
-        
-    name = random.choice(ABILITIES_POOL[tier])
+        name = random.choice(ABILITIES_POOL["5성"])
+    elif tier == "4성":
+        name = random.choice(ABILITIES_POOL["4성"])
+    else:
+        name = random.choice(ABILITIES_POOL["3성"])
     
     is_duplicate = False
     if name in st.session_state.abilities:
@@ -151,7 +154,7 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 불사조 전용 픽업 뽑기 로직 (5성 확률 0.3% 적용)
+# 불사조 전용 픽업 뽑기 로직 (티어별 정확한 풀 매칭)
 def roll_pickup_item():
     st.session_state.pickup_pity += 1
     
@@ -181,10 +184,10 @@ def roll_pickup_item():
         rand_sub = random.random() * 100
         if rand_sub < 5.0:
             tier = "4성"
+            name = random.choice(ABILITIES_POOL["4성"])
         else:
             tier = "3성"
-        all_sub_pool = ABILITIES_POOL["4성"] + ABILITIES_POOL["3성"]
-        name = random.choice(all_sub_pool)
+            name = random.choice(ABILITIES_POOL["3성"])
 
     is_duplicate = False
     if name in st.session_state.abilities:
@@ -250,7 +253,7 @@ with tab_gacha:
         pity_left = 100 - st.session_state.pity_counter
         st.info(f"""
         **📋 [일반 뽑기 규칙]**
-        * 🌟 **5성 (광대)** : **0.3%** | ✨ **4성** : **5.0%** | 🔹 **3성** : **94.7%**
+        * 🌟 **5성 (광대)** : **0.3%** | ✨ **4성 (힐러, 경찰)** : **5.0%** | 🔹 **3성 (검투사)** : **94.7%**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
     
@@ -375,7 +378,6 @@ with tab_char:
             star_display = "★" * stars + "☆" * (5 - stars)
             shards = st.session_state.ability_shards.get(name, 0)
             
-            # 간결한 리스트 형태로 UI 개선
             c_col1, c_col2 = st.columns([3, 1])
             with c_col1:
                 st.markdown(f"**[{data['tier']}] {name}** (`{star_display}` {stars}/5성)")
