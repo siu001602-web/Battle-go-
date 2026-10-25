@@ -114,7 +114,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 일반 뽑기 로직
+# 일반 뽑기 로직 (5성 확률 0.3% 적용)
 def roll_single_item():
     st.session_state.pity_counter += 1
     if st.session_state.pity_counter >= 100:
@@ -122,9 +122,9 @@ def roll_single_item():
         st.session_state.pity_counter = 0
     else:
         rand = random.random() * 100
-        if rand < 0.1:
+        if rand < 0.3:
             tier = "5성"
-        elif rand < 5.1:
+        elif rand < 5.3:
             tier = "4성"
         else:
             tier = "3성"
@@ -151,7 +151,7 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 불사조 전용 픽업 뽑기 로직
+# 불사조 전용 픽업 뽑기 로직 (5성 확률 0.3% 적용)
 def roll_pickup_item():
     st.session_state.pickup_pity += 1
     
@@ -160,7 +160,7 @@ def roll_pickup_item():
         st.session_state.pickup_pity = 0
     else:
         rand = random.random() * 100
-        if rand < 0.1:
+        if rand < 0.3:
             hit_5star = True
             st.session_state.pickup_pity = 0
         else:
@@ -169,11 +169,11 @@ def roll_pickup_item():
     if hit_5star:
         tier = "5성"
         if st.session_state.guaranteed_pickup:
-            name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
+            name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
             st.session_state.guaranteed_pickup = False
         else:
             if random.random() < 0.5:
-                name = "🔥 불사조 (궁극기: 2턴 내 사망 시 70% 부활)"
+                name = "🔥 불사조 (궁극기: 성급별 부활 효과)"
             else:
                 name = "🤡 광대 (필살기 사용 시 성급별 확률로 상대 피 -3 / 본인 피 리스크)"
                 st.session_state.guaranteed_pickup = True
@@ -242,7 +242,7 @@ with tab_gacha:
         guarantee_text = "✨ [확정 스택 ON: 다음 5성은 무조건 불사조!]" if st.session_state.guaranteed_pickup else "🎲 [50:50 확률 적용 중]"
         st.info(f"""
         **🔥 [불사조 전용 픽업 규칙]**
-        * 🌟 **5성 등장 시**: **50% 확률로 불사조 / 50% 확률로 광대(픽뚫)**
+        * 🌟 **5성 등장 확률**: **0.3%** (50% 확률 불사조 / 50% 확률 광대 픽뚫)
         * 🛡️ **천장 및 확정 시스템**: 100회 내 5성 미등장 시 확정! 만약 픽뚫(광대)이 나면 **그다음 5성은 무조건 불사조 확정!**
         * 🔥 **현재 픽업 5성까지 남은 횟수**: **{pity_left_p}회** | {guarantee_text}
         """)
@@ -250,7 +250,7 @@ with tab_gacha:
         pity_left = 100 - st.session_state.pity_counter
         st.info(f"""
         **📋 [일반 뽑기 규칙]**
-        * 🌟 **5성 (광대)** : **0.1%** | ✨ **4성** : **5.0%** | 🔹 **3성** : **94.9%**
+        * 🌟 **5성 (광대)** : **0.3%** | ✨ **4성** : **5.0%** | 🔹 **3성** : **94.7%**
         * 🔥 **천장 시스템**: 100회 내 미등장 시 다음 5성 확정! (남은 횟수: **{pity_left}회**)
         """)
     
@@ -397,7 +397,15 @@ with tab_char:
                     }
                     st.write(f"🤡 필살기 효과: **{clown_map.get(stars)}**")
                 elif "불사조" in name:
-                    st.write(f"🔥 궁극기 효과: **사망 시 2턴 내 70% 확률 부활**")
+                    phoenix_map = {
+                        0: "2턴 내 사망 시 72.5% 부활",
+                        1: "2턴 내 사망 시 75.0% 부활",
+                        2: "3턴 내 사망 시 77.5% 부활",
+                        3: "3턴 내 사망 시 80.0% 부활",
+                        4: "4턴 내 사망 시 80.0% 부활",
+                        5: "4턴 내 사망 시 80.0% 부활"
+                    }
+                    st.write(f"🔥 궁극기 효과: **{phoenix_map.get(stars)}**")
                 elif "검투사" in name:
                     st.write(f"⚔️ 필살기 2배 확률 적용")
                 elif "힐러" in name:
@@ -579,15 +587,30 @@ with tab_battle:
             
             if eq and "불사조" in eq and not st.session_state.get("phoenix_already_used", False):
                 if st.session_state.phoenix_revive_active:
+                    raw_p_name = eq.split("] ")[-1].replace("★", "").strip()
+                    phoenix_stars = st.session_state.abilities.get(raw_p_name, {}).get("stars", 0)
+                    
+                    # 성급별 부활 턴 제한 및 확률 테이블
+                    # 0성(1성): 2턴 / 72.5%
+                    # 1성(2성): 2턴 / 75.0%
+                    # 2성(3성): 3턴 / 77.5%
+                    # 3성(4성): 3턴 / 80.0%
+                    # 4~5성(5성): 4턴 / 80.0%
+                    max_turns_table = {0: 2, 1: 2, 2: 3, 3: 3, 4: 4, 5: 4}
+                    revive_prob_table = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
+                    
+                    allowed_turns = max_turns_table.get(phoenix_stars, 2)
+                    success_prob = revive_prob_table.get(phoenix_stars, 0.725)
+                    
                     turns_passed = st.session_state.turn - st.session_state.phoenix_revive_turn
-                    if turns_passed <= 2:
-                        if random.random() < 0.7:
+                    if turns_passed <= allowed_turns:
+                        if random.random() < success_prob:
                             st.session_state.player_hp = 3
                             st.session_state.game_over = False
                             st.session_state.winner = None
                             st.session_state.phoenix_already_used = True
                             phoenix_revived = True
-                            st.session_state.log = "🔥 **[불사조 부활!]** 사망 후 2턴 이내에 불사조의 기운이 발동하여 70% 확률로 부활했습니다! 체력 3으로 부활합니다!"
+                            st.session_state.log = f"🔥 **[불사조 부활!]** 사망 후 {turns_passed}턴 만에 불사조의 기운이 발동하여 {int(success_prob*100)}% 확률로 부활했습니다! 체력 3으로 부활합니다!"
 
             if phoenix_revived:
                 st.rerun()
@@ -669,7 +692,7 @@ with tab_battle:
                         if "불사조" in eq:
                             st.session_state.phoenix_revive_active = True
                             st.session_state.phoenix_revive_turn = st.session_state.turn
-                            log_message += "🔥 [불사조 궁극기 활성화!] 향후 2턴 이내 사망 시 70% 확률로 부활합니다!\n"
+                            log_message += "🔥 [불사조 궁극기 활성화!] 지정된 턴 내 사망 시 성급별 확률로 부활합니다!\n"
                         elif "검투사" in eq:
                             gladiator_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
                             prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
@@ -700,24 +723,8 @@ with tab_battle:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             clown_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
                             
-                            # 성급별 광대 확률 설정
-                            # 0성(1성): 65% / 35%, 1성(2성): 70% / 30%, 2성(3성): 70% / 30%, 3성(4성): 75% / 25%, 4~5성(5성): 80% / 20%
-                            prob_table = {
-                                0: 0.65,
-                                1: 0.70,
-                                2: 0.70,
-                                3: 0.75,
-                                4: 0.80,
-                                5: 0.80
-                            }
-                            self_damage_table = {
-                                0: 2,
-                                1: 2,
-                                2: 1,
-                                3: 1,
-                                4: 1,
-                                5: 1
-                            }
+                            prob_table = {0: 0.65, 1: 0.70, 2: 0.70, 3: 0.75, 4: 0.80, 5: 0.80}
+                            self_damage_table = {0: 2, 1: 2, 2: 1, 3: 1, 4: 1, 5: 1}
                             
                             success_p = prob_table.get(clown_stars, 0.80)
                             self_dmg = self_damage_table.get(clown_stars, 1)
