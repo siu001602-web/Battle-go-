@@ -274,10 +274,10 @@ with tab_gacha:
         
         if tier == "5성" and not st.session_state.is_5star_revealed:
             st.markdown(f"""
-            <div style="background-color: #222; border: 4px dashed #FFC107; padding: 50px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
-                <h1 style="color: #FFC107; margin: 0;">❓❓❓</h1>
-                <p style="color: #FFF; font-size: 18px; margin-top: 15px;">전설의 기운이 느껴집니다... 카드를 클릭하여 열어보세요!</p>
-                <p style="color: #888; margin-top: 10px;">카드 {idx + 1} / {total}</p>
+            <div style="background-color: #222; border: 4px dashed #FFC107; padding: 40px; border-radius: 12px; text-align: center; margin-bottom: 15px;">
+                <h2 style="color: #FFC107; margin: 0;">❓❓❓</h2>
+                <p style="color: #FFF; font-size: 15px; margin-top: 10px;">전설의 기운이 느껴집니다... 카드를 클릭하여 열어보세요!</p>
+                <p style="color: #888; font-size: 13px; margin-top: 5px;">카드 {idx + 1} / {total}</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -299,14 +299,14 @@ with tab_gacha:
                 border_color = "#17A2B8"
                 tier_badge = "🔹 [3성 일반]"
                 
-            dup_text = "🔄 (이미 보유 중 - 조각/전환 적용)" if is_dup else "🎉 (신규 획득!)"
+            dup_text = "🔄 (이미 보유 중 - 조각 전환)" if is_dup else "🎉 (신규 획득!)"
             
             st.markdown(f"""
-            <div style="background-color: {bg_color}; border: 3px solid {border_color}; padding: 30px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
-                <h2 style="color: #333; margin: 0;">{tier_badge}</h2>
-                <h1 style="color: #111; margin: 15px 0;">{name}</h1>
-                <p style="font-size: 16px; color: #555; font-weight: bold;">{dup_text}</p>
-                <p style="color: #777; margin-top: 15px;">카드 {idx + 1} / {total}</p>
+            <div style="background-color: {bg_color}; border: 2px solid {border_color}; padding: 20px; border-radius: 12px; text-align: center; margin-bottom: 15px;">
+                <h4 style="color: #333; margin: 0;">{tier_badge}</h4>
+                <h3 style="color: #111; margin: 10px 0;">{name}</h3>
+                <p style="font-size: 14px; color: #555; font-weight: bold; margin: 0;">{dup_text}</p>
+                <p style="color: #777; font-size: 12px; margin-top: 8px;">카드 {idx + 1} / {total}</p>
             </div>
             """, unsafe_allow_html=True)
             
@@ -317,18 +317,18 @@ with tab_gacha:
             c_prev, c_next, c_close = st.columns(3)
             with c_prev:
                 if idx > 0:
-                    if st.button("◀ 이전 카드"):
+                    if st.button("◀ 이전"):
                         st.session_state.is_5star_revealed = False
                         st.session_state.gacha_index -= 1
                         st.rerun()
             with c_next:
                 if idx < total - 1:
-                    if st.button("다음 카드 ▶"):
+                    if st.button("다음 ▶"):
                         st.session_state.is_5star_revealed = False
                         st.session_state.gacha_index += 1
                         st.rerun()
             with c_close:
-                if st.button("❌ 결과창 닫기"):
+                if st.button("❌ 닫기"):
                     st.session_state.is_gacha_open = False
                     st.session_state.is_5star_revealed = False
                     st.session_state.gacha_results = []
@@ -342,10 +342,7 @@ with tab_gacha:
         if st.button("🎲 1회 뽑기 (보석 100개)"):
             if st.session_state.gems >= 100:
                 st.session_state.gems -= 100
-                if "불사조" in banner_type:
-                    res = roll_pickup_item()
-                else:
-                    res = roll_single_item()
+                res = roll_pickup_item() if "불사조" in banner_type else roll_single_item()
                 st.session_state.gacha_results = [res]
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
@@ -358,11 +355,7 @@ with tab_gacha:
         if st.button("✨ 10연차 뽑기 (보석 1000개)"):
             if st.session_state.gems >= 1000:
                 st.session_state.gems -= 1000
-                if "불사조" in banner_type:
-                    results = [roll_pickup_item() for _ in range(10)]
-                else:
-                    results = [roll_single_item() for _ in range(10)]
-                
+                results = [roll_pickup_item() for _ in range(10)] if "불사조" in banner_type else [roll_single_item() for _ in range(10)]
                 st.session_state.gacha_results = results
                 st.session_state.gacha_index = 0
                 st.session_state.is_5star_revealed = False
@@ -373,7 +366,7 @@ with tab_gacha:
 
 with tab_char:
     st.subheader("👥 캐릭터 창 & 승급 시스템")
-    st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다!")
+    st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다.")
     st.divider()
 
     if st.session_state.abilities:
@@ -382,20 +375,20 @@ with tab_char:
             star_display = "★" * stars + "☆" * (5 - stars)
             shards = st.session_state.ability_shards.get(name, 0)
             
+            # 간결한 리스트 형태로 UI 개선
             c_col1, c_col2 = st.columns([3, 1])
             with c_col1:
-                st.markdown(f"### **[{data['tier']}] {name}**")
-                st.write(f"등급 성취도: `{star_display}` ({stars}/5성)")
+                st.markdown(f"**[{data['tier']}] {name}** (`{star_display}` {stars}/5성)")
                 if "광대" in name:
                     clown_map = {
-                        0: "65% 확률 상대 피 -3 / 35% 확률 본인 피 -2",
-                        1: "70% 확률 상대 피 -3 / 30% 확률 본인 피 -2",
-                        2: "70% 확률 상대 피 -3 / 30% 확률 본인 피 -1",
-                        3: "75% 확률 상대 피 -3 / 25% 확률 본인 피 -1",
-                        4: "80% 확률 상대 피 -3 / 20% 확률 본인 피 -1",
-                        5: "80% 확률 상대 피 -3 / 20% 확률 본인 피 -1"
+                        0: "65% 상대 피 -3 / 35% 본인 피 -2",
+                        1: "70% 상대 피 -3 / 30% 본인 피 -2",
+                        2: "70% 상대 피 -3 / 30% 본인 피 -1",
+                        3: "75% 상대 피 -3 / 25% 본인 피 -1",
+                        4: "80% 상대 피 -3 / 20% 본인 피 -1",
+                        5: "80% 상대 피 -3 / 20% 본인 피 -1"
                     }
-                    st.write(f"🤡 필살기 효과: **{clown_map.get(stars)}**")
+                    st.caption(f"🤡 효과: {clown_map.get(stars)}")
                 elif "불사조" in name:
                     phoenix_map = {
                         0: "2턴 내 사망 시 72.5% 부활",
@@ -405,26 +398,23 @@ with tab_char:
                         4: "4턴 내 사망 시 80.0% 부활",
                         5: "4턴 내 사망 시 80.0% 부활"
                     }
-                    st.write(f"🔥 궁극기 효과: **{phoenix_map.get(stars)}**")
-                elif "검투사" in name:
-                    st.write(f"⚔️ 필살기 2배 확률 적용")
-                elif "힐러" in name:
-                    st.write(f"💊 필살기 체력 회복 적용")
-                elif "경찰" in name:
-                    st.write(f"🚨 필살기 기술 밴 적용")
-                st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
+                    st.caption(f"🔥 효과: {phoenix_map.get(stars)}")
+                else:
+                    st.caption("✨ 성급별 전투 강화 효과 적용 중")
+                st.text(f"보유 조각: {shards}개 (필요: 1개)")
+                
             with c_col2:
                 if stars < 5:
-                    if st.button("⭐ 승급하기", key=f"upgrade_{name}"):
+                    if st.button("⭐ 승급", key=f"upgrade_{name}"):
                         if shards >= 1:
                             st.session_state.ability_shards[name] -= 1
                             st.session_state.abilities[name]["stars"] += 1
-                            st.success(f"🎉 [{name}] 승급 성공!")
+                            st.success("승급 성공!")
                             st.rerun()
                         else:
-                            st.error("조각이 부족합니다!")
+                            st.error("조각 부족!")
                 else:
-                    st.markdown("🔥 **최고 등급 달성!**")
+                    st.markdown("🔥 **MAX**")
             st.divider()
             
         st.subheader("🛡️ 전투 장착 능력 선택")
@@ -590,12 +580,6 @@ with tab_battle:
                     raw_p_name = eq.split("] ")[-1].replace("★", "").strip()
                     phoenix_stars = st.session_state.abilities.get(raw_p_name, {}).get("stars", 0)
                     
-                    # 성급별 부활 턴 제한 및 확률 테이블
-                    # 0성(1성): 2턴 / 72.5%
-                    # 1성(2성): 2턴 / 75.0%
-                    # 2성(3성): 3턴 / 77.5%
-                    # 3성(4성): 3턴 / 80.0%
-                    # 4~5성(5성): 4턴 / 80.0%
                     max_turns_table = {0: 2, 1: 2, 2: 3, 3: 3, 4: 4, 5: 4}
                     revive_prob_table = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
                     
