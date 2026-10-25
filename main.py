@@ -589,7 +589,11 @@ with tab_char:
     st.subheader("🔑 비밀 제작자 코드")
     creator_code_input = st.text_input("코드 입력", type="password")
     if st.button("코드 제출"):
-        if creator_code_input == "siu0925":
+        if creator_code_input == "Suuu":
+            st.session_state.gems += 3000
+            st.success("🎉 보석 3,000개 지급!")
+            st.rerun()
+        elif creator_code_input == "siu0925":
             st.session_state.gems += 10000
             st.success("🎉 보석 10,000개 지급!")
             st.rerun()
