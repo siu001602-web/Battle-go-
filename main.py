@@ -30,22 +30,24 @@ if "initialized" not in st.session_state:
     st.session_state.abilities = {}       # 보유 능력 (키: 이름, 값: {"tier": 등급, "stars": 별개수(0~5)})
     st.session_state.ability_shards = {}  # 개별 능력 승급용 조각
     st.session_state.equipped_ability = None
-    st.session_state.banned_action = None
+    st.session_state.banned_actions = []  # 밴 당한 기술들 (다중 밴 지원)
     
-    # 뽑기 결과 카드 넘기기용 세션 상태 (에러 방지용 필수 추가)
+    # 뽑기 결과 카드 넘기기용 세션 상태
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
     
     st.session_state.initialized = True
 
-# 기존 코드가 업그레이드될 때를 대비해 세션 변수 안전 장치 추가
+# 세션 상태 안전 장치
 if "is_gacha_open" not in st.session_state:
     st.session_state.is_gacha_open = False
 if "gacha_results" not in st.session_state:
     st.session_state.gacha_results = []
 if "gacha_index" not in st.session_state:
     st.session_state.gacha_index = 0
+if "banned_actions" not in st.session_state:
+    st.session_state.banned_actions = []
 
 # 등급별 능력 풀 정의
 ABILITIES_POOL = {
@@ -54,7 +56,7 @@ ABILITIES_POOL = {
     ],
     "4성": [
         "💊 힐러 (필살기 사용 시 70% 확률로 체력 3 회복)",
-        "🚨 경찰 (필살기 사용 시 70% 확률로 상대 기술 1개 밴)"
+        "🚨 경찰 (필살기 사용 시 성급별 확률로 상대 기술 밴)"
     ],
     "5성": [
         "🤡 광대 (필살기 사용 시 60% 확률로 상대 피 -3 / 40% 확률로 본인 피 -2)"
@@ -76,7 +78,7 @@ def reset_game():
     st.session_state.game_over = False
     st.session_state.winner = None
     st.session_state.player_history = []
-    st.session_state.banned_action = None
+    st.session_state.banned_actions = []
     st.session_state.log = "게임이 초기화되었습니다. 다시 시작하세요!"
 
 def render_hp(current_hp, max_hp=5):
@@ -175,7 +177,6 @@ with tab_gacha:
         name = item["name"]
         is_dup = item["is_duplicate"]
         
-        # 등급별 배경 스타일 설정
         if tier == "5성":
             bg_color = "#FFF3CD"
             border_color = "#FFC107"
@@ -286,6 +287,11 @@ with tab_char:
                     prob_map = {0: 50, 1: 55, 2: 60, 3: 65, 4: 70, 5: 75}
                     current_prob = prob_map.get(stars, 75)
                     st.write(f"⚔️ 현재 필살기 2배 확률: **{current_prob}%**")
+                elif "경찰" in name:
+                    cop_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
+                    current_cop_prob = cop_prob_map.get(stars, 80.0)
+                    cop_ban_count = 2 if stars >= 5 else 1
+                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴")
                 st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
             with c_col2:
                 if stars < 5:
@@ -451,27 +457,27 @@ with tab_battle:
     else:
         st.subheader("행동을 선택하세요")
         
-        banned = st.session_state.get("banned_action", None)
-        if banned:
-            st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **[{banned}]** 기술을 사용할 수 없습니다!")
+        banned_list = st.session_state.get("banned_actions", [])
+        if banned_list:
+            st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
 
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         
         player_choice = None
         with c1:
-            if st.button("⚔️ 공격", disabled=(banned == "공격")):
+            if st.button("⚔️ 공격", disabled=("공격" in banned_list)):
                 player_choice = "공격"
         with c2:
-            if st.button("🛡️ 방어", disabled=(banned == "방어")):
+            if st.button("🛡️ 방어", disabled=("방어" in banned_list)):
                 player_choice = "방어"
         with c3:
-            if st.button("💊 치료", disabled=(banned == "치료")):
+            if st.button("💊 치료", disabled=("치료" in banned_list)):
                 player_choice = "치료"
         with c4:
-            if st.button("⏳ 존버", disabled=(banned == "존버")):
+            if st.button("⏳ 존버", disabled=("존버" in banned_list)):
                 player_choice = "존버"
         with c5:
-            if p_cd > 0 or banned == "반격":
+            if p_cd > 0 or "반격" in banned_list:
                 st.button(f"🥊 반격({p_cd}턴)", disabled=True)
             else:
                 if st.button("🥊 반격"):
@@ -483,7 +489,7 @@ with tab_battle:
             else:
                 st.button("✨ 필살기", disabled=True)
 
-        st.session_state.banned_action = None
+        st.session_state.banned_actions = []
 
         if player_choice:
             if "player_history" not in st.session_state:
@@ -538,13 +544,20 @@ with tab_battle:
                     else:
                         log_message += "💊 [힐러 효과 실패] 70% 확률 실패로 회복되지 않았습니다.\n"
                 elif "경찰" in eq:
-                    if random.random() < 0.7:
+                    raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                    cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                    
+                    cop_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
+                    cop_success_prob = cop_prob_map.get(cop_stars, 0.800)
+                    ban_count = 2 if cop_stars >= 5 else 1
+                    
+                    if random.random() < cop_success_prob:
                         all_actions = ["공격", "방어", "치료", "존버", "반격"]
-                        banned = random.choice(all_actions)
-                        st.session_state.banned_action = banned
-                        log_message += f"🚨 [경찰 효과 발동!] 70% 확률 성공! 다음 턴 상대의 **[{banned}]** 기술을 밴했습니다!\n"
+                        banned = random.sample(all_actions, min(ban_count, len(all_actions)))
+                        st.session_state.banned_actions = banned
+                        log_message += f"🚨 [경찰 효과 발동!] 확률 {int(cop_success_prob*100)}% 성공! 다음 턴 상대의 **{', '.join([f'[{b}]' for b in banned])}** 기술을 밴했습니다!\n"
                     else:
-                        log_message += "🚨 [경찰 효과 실패] 기술 밴에 실패했습니다.\n"
+                        log_message += f"🚨 [경찰 효과 실패] 확률 {int(cop_success_prob*100)}% 실패로 기술 밴에 실패했습니다.\n"
                 elif "광대" in eq:
                     if random.random() < 0.6:
                         p_dmg_deal += 3
