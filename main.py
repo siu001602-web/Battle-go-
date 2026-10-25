@@ -27,27 +27,33 @@ if "initialized" not in st.session_state:
     # 재화 및 인벤토리 상태
     st.session_state.gems = 0
     st.session_state.guardian_shards = 0  # 수호의 조각
-    st.session_state.abilities = {}       # 보유 능력 (키: 이름, 값: {"tier": 등급, "stars": 별개수(0~5)})
+    st.session_state.abilities = {}       # 보유 능력
     st.session_state.ability_shards = {}  # 개별 능력 승급용 조각
     st.session_state.equipped_ability = None
-    st.session_state.banned_actions = []  # 밴 당한 기술들 (다중 밴 지원)
+    st.session_state.banned_actions = []
     
     # 뽑기 결과 카드 넘기기용 세션 상태
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
     
+    # 멀티플레이(방 시스템) 관련 상태
+    st.session_state.game_mode = "AI 배틀"  # "AI 배틀" 또는 "플레이어 대결"
+    st.session_state.room_id = ""
+    st.session_state.pvp_rooms = {}  # 방 데이터 저장소
+    st.session_state.pvp_role = None  # "host" 또는 "guest"
+    
     st.session_state.initialized = True
 
-# 세션 상태 안전 장치
-if "is_gacha_open" not in st.session_state:
-    st.session_state.is_gacha_open = False
-if "gacha_results" not in st.session_state:
-    st.session_state.gacha_results = []
-if "gacha_index" not in st.session_state:
-    st.session_state.gacha_index = 0
-if "banned_actions" not in st.session_state:
-    st.session_state.banned_actions = []
+# 안전 장치
+if "game_mode" not in st.session_state:
+    st.session_state.game_mode = "AI 배틀"
+if "pvp_rooms" not in st.session_state:
+    st.session_state.pvp_rooms = {}
+if "room_id" not in st.session_state:
+    st.session_state.room_id = ""
+if "pvp_role" not in st.session_state:
+    st.session_state.pvp_role = None
 
 # 등급별 능력 풀 정의
 ABILITIES_POOL = {
@@ -86,7 +92,6 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (만렙 초과 시 백그라운드 자동 수호의 조각 전환)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -98,7 +103,6 @@ def roll_single_item():
     name = random.choice(ABILITIES_POOL[tier])
     
     is_duplicate = False
-    
     if name in st.session_state.abilities:
         is_duplicate = True
         if st.session_state.abilities[name]["stars"] >= 5:
@@ -115,7 +119,6 @@ def roll_single_item():
             
     return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
 
-# 스마트 AI 선택 로직
 def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
     if ai_ultimate >= 3 and random.random() < 0.7:
         return "필살기"
@@ -153,9 +156,9 @@ with tab_gacha:
     * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라색 배경 카드)
     * 🔹 **3성 (검투사)** : **94.9%** (파란색 배경 카드)
-    * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 자동으로 수호의 조각(`4성 +10개`, `5성 +100개`)으로 전환됩니다.
+    * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 수호의 조각으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
-    *(※ 10연차 시 4성 이상 능력 1개 확정!)*
+    * 👥 **플레이어 대결(PvP) 승리 시**: 보석 **100개** / 패배 시 **50개** 획득!
     """)
     
     col_gem, col_guard = st.columns(2)
@@ -164,7 +167,6 @@ with tab_gacha:
     with col_guard:
         st.metric("보유 수호의 조각", f"🛡️ {st.session_state.guardian_shards}개")
     
-    # 뽑기 결과 카드 뒤집기 화면
     if st.session_state.is_gacha_open:
         st.divider()
         st.markdown("### 🎴 뽑기 결과 확인 (카드를 넘겨보세요!)")
@@ -233,14 +235,13 @@ with tab_gacha:
                 st.session_state.is_gacha_open = True
                 st.rerun()
             else:
-                st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
+                st.error("보석이 부족합니다!")
                 
     with g_col2:
         if st.button("✨ 10연차 뽑기 (보석 1000개 - 4성 확정)"):
             if st.session_state.gems >= 1000:
                 st.session_state.gems -= 1000
                 results = [roll_single_item() for _ in range(10)]
-                
                 has_4star_or_higher = any(item["tier"] in ["4성", "5성"] for item in results)
                 if not has_4star_or_higher:
                     gt = "5성" if random.random() * 100 < 2 else "4성"
@@ -258,7 +259,6 @@ with tab_gacha:
                         st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
                         if g_name not in st.session_state.ability_shards:
                             st.session_state.ability_shards[g_name] = 0
-                            
                     results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup}
                 
                 st.session_state.gacha_results = results
@@ -266,7 +266,7 @@ with tab_gacha:
                 st.session_state.is_gacha_open = True
                 st.rerun()
             else:
-                st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
+                st.error("보석이 부족합니다!")
 
 with tab_char:
     st.subheader("👥 캐릭터 창 & 승급 시스템")
@@ -304,12 +304,12 @@ with tab_char:
                         if shards >= 1:
                             st.session_state.ability_shards[name] -= 1
                             st.session_state.abilities[name]["stars"] += 1
-                            st.success(f"🎉 [{name}] 승급 성공! ({stars + 1}성 달성)")
+                            st.success(f"🎉 [{name}] 승급 성공!")
                             st.rerun()
                         else:
                             st.error("조각이 부족합니다!")
                 else:
-                    st.markdown("🔥 **최고 등급 달성 완료!**")
+                    st.markdown("🔥 **최고 등급 달성!**")
             st.divider()
             
         st.subheader("🛡️ 전투 장착 능력 선택")
@@ -323,396 +323,345 @@ with tab_char:
 
     st.divider()
     st.subheader("🏪 수호의 조각 교환 상점")
-    st.write("모은 수호의 조각으로 다이아를 교환하거나 원하는 5성 능력을 선택하세요!")
-    
     s_col1, s_col2 = st.columns(2)
     with s_col1:
         st.markdown("#### 💎 다이아 교환")
-        st.write("수호의 조각 10개 ⇄ 다이아 100개")
         if st.button("다이아 100개 교환하기"):
             if st.session_state.guardian_shards >= 10:
                 st.session_state.guardian_shards -= 10
                 st.session_state.gems += 100
-                st.success("✨ 수호의 조각 10개를 소비하여 다이아 100개를 획득했습니다!")
+                st.success("✨ 교환 성공!")
                 st.rerun()
             else:
-                st.error("수호의 조각이 부족합니다! (필요: 10개)")
-                
+                st.error("수호의 조각 부족!")
     with s_col2:
         st.markdown("#### 🌟 5성 선택권")
-        st.write("수호의 조각 300개 ⇄ 5성 광대 1개")
         if st.button("5성 광대 선택권 교환"):
             if st.session_state.guardian_shards >= 300:
                 st.session_state.guardian_shards -= 300
                 target_5star = ABILITIES_POOL["5성"][0]
-                
                 if target_5star in st.session_state.abilities:
-                    if st.session_state.abilities[target_5star]["stars"] >= 5:
-                        st.session_state.guardian_shards += 100
-                        st.success("🎉 이미 만렙인 5성이므로 수호의 조각 100개 페이백이 적용되었습니다!")
-                    else:
-                        st.session_state.ability_shards[target_5star] = st.session_state.ability_shards.get(target_5star, 0) + 1
-                        st.success("🎉 이미 보유한 5성이므로 해당 능력 조각 +1개가 지급되었습니다!")
+                    st.session_state.abilities[target_5star]["stars"] = 5
                 else:
-                    st.session_state.abilities[target_5star] = {"tier": "5성", "stars": 0}
-                    if target_5star not in st.session_state.ability_shards:
-                        st.session_state.ability_shards[target_5star] = 0
-                    st.success(f"🎉 5성 선택권 교환 성공! **{target_5star}** 획득!")
+                    st.session_state.abilities[target_5star] = {"tier": "5성", "stars": 5}
+                st.success("🎉 5성 광대 획득!")
                 st.rerun()
             else:
-                st.error("수호의 조각이 부족합니다! (필요: 300개)")
+                st.error("수호의 조각 부족!")
 
     st.divider()
-    st.subheader("🔑 비밀 제작자 코드 시스템")
-    st.write("제작자 코드를 입력하여 보석을 획득하세요.")
-    creator_code_input = st.text_input("제작자 코드를 입력하세요", type="password")
-    if st.button("코드 제출 및 보상 수령"):
+    st.subheader("🔑 비밀 제작자 코드")
+    creator_code_input = st.text_input("코드 입력", type="password")
+    if st.button("코드 제출"):
         if creator_code_input == "siu0925":
             st.session_state.gems += 5000
-            st.success("🎉 [제작자 인증 성공!] 보석 5,000개가 지급되었습니다!")
+            st.success("🎉 보석 5,000개 지급!")
             st.rerun()
         else:
-            st.error("❌ 올바르지 않은 제작자 코드입니다.")
+            st.error("❌ 올바르지 않은 코드입니다.")
 
     st.divider()
-    st.subheader("💾 게임 기록 저장 및 복구 (업데이트 대비 백업)")
-    st.write("앱 업데이트나 브라우저 초기화 대비 내 게임 데이터를 백업하고 불러올 수 있습니다.")
-
-    game_data = {
-        "gems": st.session_state.gems,
-        "guardian_shards": st.session_state.guardian_shards,
-        "abilities": st.session_state.abilities,
-        "ability_shards": st.session_state.ability_shards,
-        "equipped_ability": st.session_state.equipped_ability
-    }
-    json_str = json.dumps(game_data, ensure_ascii=False, indent=4)
-
-    st.download_button(
-        label="📥 내 게임 기록 백업하기 (JSON 다운로드)",
-        data=json_str,
-        file_name="my_game_save.json",
-        mime="application/json"
-    )
-
-    uploaded_file = st.file_uploader("📤 백업한 게임 기록 파일 불러오기", type=["json"])
-    if uploaded_file is not None:
-        try:
-            loaded_data = json.load(uploaded_file)
-            st.session_state.gems = loaded_data.get("gems", 0)
-            st.session_state.guardian_shards = loaded_data.get("guardian_shards", 0)
-            st.session_state.abilities = loaded_data.get("abilities", {})
-            st.session_state.ability_shards = loaded_data.get("ability_shards", {})
-            st.session_state.equipped_ability = loaded_data.get("equipped_ability", None)
-            st.success("🎉 게임 기록을 성공적으로 불러왔습니다!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ 파일 형식이 올바르지 않습니다: {e}")
-
-    st.write("---")
-    if st.button("🗑️ 모든 데이터 전체 초기화"):
-        st.session_state.abilities = {}
-        st.session_state.ability_shards = {}
-        st.session_state.guardian_shards = 0
-        st.session_state.gems = 0
-        st.session_state.equipped_ability = None
+    if st.button("🗑️ 데이터 전체 초기화"):
+        st.session_state.clear()
         st.rerun()
 
 with tab_battle:
-    st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 상대와 겨루세요! (매 5턴마다 필살기 즉시 충전)")
+    st.subheader("⚔️ 배틀 모드 선택")
+    mode = st.radio("모드를 선택하세요", ["🤖 AI 배틀", "👥 플레이어 대결 (방 만들기/입장)"], horizontal=True)
     
-    equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
-    st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")
-    
-    st.divider()
-
-    p_wait = st.session_state.get("player_wait_turns", 0)
-    ai_wait = st.session_state.get("ai_wait_turns", 0)
-    p_hp = st.session_state.get("player_hp", 5)
-    ai_hp = st.session_state.get("ai_hp", 5)
-    turn = st.session_state.get("turn", 1)
-    p_ult = st.session_state.get("player_ultimate", 0)
-    ai_ult = st.session_state.get("ai_ultimate", 0)
-    p_cd = st.session_state.get("player_counter_cooldown", 0)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        buff_text = f" 🔥버프({p_wait}턴)" if p_wait > 0 else ""
-        ult_status = "✨ [사용 가능!]" if p_ult >= 3 else f"✨ 충전중({p_ult}/3)"
-        st.metric("내 체력", f"{render_hp(p_hp)}{buff_text}\n{ult_status}")
-    with col2:
-        st.metric("현재 턴", f"{turn}턴")
-    with col3:
-        ai_buff_text = f" 🔥버프({ai_wait}턴)" if ai_wait > 0 else ""
-        ai_ult_status = "✨ [사용 가능!]" if ai_ult >= 3 else f"✨ 충전중({ai_ult}/3)"
-        st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}\n{ai_ult_status}")
-
-    st.divider()
-
-    if st.session_state.get("game_over", False):
-        if st.session_state.winner == "player":
-            st.success("🎉 승리했습니다! 상대를 제압했어요! (💎 보석 20개 획득)")
-        elif st.session_state.winner == "ai":
-            st.error("💀 패배했습니다... 상대에게 졌습니다.")
-        else:
-            st.info("🤝 무승부입니다!")
-        
-        if st.button("다시 하기"):
-            reset_game()
-            st.rerun()
+    if "AI" in mode:
+        st.session_state.game_mode = "AI 배틀"
     else:
-        st.subheader("행동을 선택하세요")
+        st.session_state.game_mode = "플레이어 대결"
         
-        banned_list = st.session_state.get("banned_actions", [])
-        if banned_list:
-            st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
+    st.divider()
 
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+    if st.session_state.game_mode == "플레이어 대결":
+        st.markdown("### 🌐 플레이어 멀티 대결 로비")
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            input_room = st.text_input("방 번호 입력", placeholder="예: 1234")
+            if st.button("🚪 방 입장하기"):
+                if input_room:
+                    st.session_state.room_id = input_room
+                    if input_room not in st.session_state.pvp_rooms:
+                        # 방이 없으면 새로 생성하며 방장(Host)으로 참가
+                        st.session_state.pvp_rooms[input_room] = {
+                            "host_choice": None, "guest_choice": None,
+                            "host_hp": 5, "guest_hp": 5, "turn": 1,
+                            "status": "waiting"
+                        }
+                        st.session_state.pvp_role = "host"
+                        st.success(f"✨ 방 [{input_room}]을 생성하고 방장으로 입장했습니다!")
+                    else:
+                        # 방이 있으면 손님(Guest)으로 참가
+                        st.session_state.pvp_role = "guest"
+                        st.success(f"✨ 방 [{input_room}]에 게스트로 입장했습니다!")
+                    st.rerun()
+                else:
+                    st.error("방 번호를 입력해주세요.")
+                    
+        if st.session_state.room_id:
+            st.info(f"현재 접속 중인 방 번호: **{st.session_state.room_id}** (역할: {'방장 (Host)' if st.session_state.pvp_role == 'host' else '게스트 (Guest)'})")
+            room = st.session_state.pvp_rooms.get(st.session_state.room_id)
+            
+            if room:
+                st.write(f"현재 턴: {room['turn']}턴 | 내 역할: {st.session_state.pvp_role}")
+                c_h, c_g = st.columns(2)
+                with c_h:
+                    st.metric("방장 체력", render_hp(room['host_hp']))
+                with c_g:
+                    st.metric("게스트 체력", render_hp(room['guest_hp']))
+                    
+                st.divider()
+                if room['host_hp'] > 0 and room['guest_hp'] > 0:
+                    st.subheader("내 행동 선택")
+                    my_move = st.radio("행동을 고르세요", ["공격", "방어", "치료", "존버", "반격"], key=f"pvp_move_{st.session_state.room_id}")
+                    
+                    if st.button("행동 확정하기"):
+                        if st.session_state.pvp_role == "host":
+                            room['host_choice'] = my_move
+                        else:
+                            room['guest_choice'] = my_move
+                        st.success("행동이 제출되었습니다! 상대방의 입력을 기다리거나 상대방 화면에서 확인하세요.")
+                        st.rerun()
+                        
+                    # 양쪽 다 선택 완료 시 턴 계산 진행
+                    if room['host_choice'] and room['guest_choice']:
+                        st.markdown(f"--- \n **[이전 턴 결과]** 방장: {room['host_choice']} | 게스트: {room['guest_choice']}")
+                        # 간단 대미지 계산 예시 (공격 vs 방어 등)
+                        if room['host_choice'] == "공격" and room['guest_choice'] != "방어":
+                            room['guest_hp'] = max(0, room['guest_hp'] - 1)
+                        if room['guest_choice'] == "공격" and room['host_choice'] != "방어":
+                            room['host_hp'] = max(0, room['host_hp'] - 1)
+                            
+                        room['turn'] += 1
+                        room['host_choice'] = None
+                        room['guest_choice'] = None
+                        st.rerun()
+                else:
+                    winner_role = "방장 (Host)" if room['host_hp'] > 0 else "게스트 (Guest)"
+                    is_my_win = (st.session_state.pvp_role == "host" and room['host_hp'] > 0) or (st.session_state.pvp_role == "guest" and room['guest_hp'] > 0)
+                    
+                    if is_my_win:
+                        st.success(f"🎉 승리했습니다! 💎 보석 100개가 지급되었습니다!")
+                        st.session_state.gems += 100
+                    else:
+                        st.error(f"💀 패배했습니다... 💎 보석 50개가 지급되었습니다.")
+                        st.session_state.gems += 50
+                        
+                    if st.button("PvP 방 초기화 및 재시작"):
+                        del st.session_state.pvp_rooms[st.session_state.room_id]
+                        st.session_state.room_id = ""
+                        st.rerun()
+        else:
+            st.write("방 번호를 입력하고 입장하면 대결이 시작됩니다!")
+
+    else:
+        # AI 배틀 모드
+        st.write("공격, 방어, 치료, 존버, 반격, 필살기를 활용해 AI와 겨루세요! (AI 승리 시 💎 보석 20개)")
+        equipped = st.session_state.get("equipped_ability", "장착된 능력 없음")
+        st.markdown(f"🛡️ **현재 장착된 능력**: `{equipped}`")
         
-        player_choice = None
-        with c1:
-            if st.button("⚔️ 공격", disabled=("공격" in banned_list)):
-                player_choice = "공격"
-        with c2:
-            if st.button("🛡️ 방어", disabled=("방어" in banned_list)):
-                player_choice = "방어"
-        with c3:
-            if st.button("💊 치료", disabled=("치료" in banned_list)):
-                player_choice = "치료"
-        with c4:
-            if st.button("⏳ 존버", disabled=("존버" in banned_list)):
-                player_choice = "존버"
-        with c5:
-            if p_cd > 0 or "반격" in banned_list:
-                st.button(f"🥊 반격({p_cd}턴)", disabled=True)
+        st.divider()
+
+        p_wait = st.session_state.get("player_wait_turns", 0)
+        ai_wait = st.session_state.get("ai_wait_turns", 0)
+        p_hp = st.session_state.get("player_hp", 5)
+        ai_hp = st.session_state.get("ai_hp", 5)
+        turn = st.session_state.get("turn", 1)
+        p_ult = st.session_state.get("player_ultimate", 0)
+        ai_ult = st.session_state.get("ai_ultimate", 0)
+        p_cd = st.session_state.get("player_counter_cooldown", 0)
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            buff_text = f" 🔥버프({p_wait}턴)" if p_wait > 0 else ""
+            ult_status = "✨ [사용 가능!]" if p_ult >= 3 else f"✨ 충전중({p_ult}/3)"
+            st.metric("내 체력", f"{render_hp(p_hp)}{buff_text}\n{ult_status}")
+        with col2:
+            st.metric("현재 턴", f"{turn}턴")
+        with col3:
+            ai_buff_text = f" 🔥버프({ai_wait}턴)" if ai_wait > 0 else ""
+            ai_ult_status = "✨ [사용 가능!]" if ai_ult >= 3 else f"✨ 충전중({ai_ult}/3)"
+            st.metric("상대 체력", f"{render_hp(ai_hp)}{ai_buff_text}\n{ai_ult_status}")
+
+        st.divider()
+
+        if st.session_state.get("game_over", False):
+            if st.session_state.winner == "player":
+                st.success("🎉 승리했습니다! (💎 보석 20개 획득)")
+            elif st.session_state.winner == "ai":
+                st.error("💀 패배했습니다...")
             else:
-                if st.button("🥊 반격"):
-                    player_choice = "반격"
-        with c6:
-            if p_ult >= 3:
-                if st.button("✨ 필살기"):
-                    player_choice = "필살기"
-            else:
-                st.button("✨ 필살기", disabled=True)
-
-        st.session_state.banned_actions = []
-
-        if player_choice:
-            if "player_history" not in st.session_state:
-                st.session_state.player_history = []
-                
-            st.session_state.player_history.append(player_choice)
-            if len(st.session_state.player_history) > 5:
-                st.session_state.player_history.pop(0)
-
-            ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+                st.info("🤝 무승부입니다!")
             
-            base_damage = 2 if st.session_state.turn >= 10 else 1
-            log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
-            
-            p_dmg_deal = 0
-            ai_dmg_deal = 0
-            
-            if player_choice == "공격":
-                st.session_state.player_consecutive += 1
-            else:
-                st.session_state.player_consecutive = 0
-                
-            if ai_choice == "공격":
-                st.session_state.ai_consecutive += 1
-            else:
-                st.session_state.ai_consecutive = 0
+            if st.button("다시 하기"):
+                reset_game()
+                st.rerun()
+        else:
+            st.subheader("행동을 선택하세요")
+            banned_list = st.session_state.get("banned_actions", [])
+            if banned_list:
+                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
 
-            is_player_exhausted = st.session_state.player_consecutive >= 3
-            is_ai_exhausted = st.session_state.ai_consecutive >= 3
+            c1, c2, c3, c4, c5, c6 = st.columns(6)
+            player_choice = None
+            with c1:
+                if st.button("⚔️ 공격", disabled=("공격" in banned_list)): player_choice = "공격"
+            with c2:
+                if st.button("🛡️ 방어", disabled=("방어" in banned_list)): player_choice = "방어"
+            with c3:
+                if st.button("💊 치료", disabled=("치료" in banned_list)): player_choice = "치료"
+            with c4:
+                if st.button("⏳ 존버", disabled=("존버" in banned_list)): player_choice = "존버"
+            with c5:
+                if p_cd > 0 or "반격" in banned_list:
+                    st.button(f"🥊 반격({p_cd}턴)", disabled=True)
+                else:
+                    if st.button("🥊 반격"): player_choice = "반격"
+            with c6:
+                if p_ult >= 3:
+                    if st.button("✨ 필살기"): player_choice = "필살기"
+                else:
+                    st.button("✨ 필살기", disabled=True)
 
-            # 플레이어 행동
-            if player_choice == "필살기":
-                st.session_state.player_ultimate = 0
-                p_dmg_deal = 3
-                log_message += f"✨ [필살기 작렬!] 기본 대미지 3 부여!\n"
+            st.session_state.banned_actions = []
+
+            if player_choice:
+                if "player_history" not in st.session_state:
+                    st.session_state.player_history = []
+                st.session_state.player_history.append(player_choice)
+                if len(st.session_state.player_history) > 5:
+                    st.session_state.player_history.pop(0)
+
+                ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+                base_damage = 2 if st.session_state.turn >= 10 else 1
+                log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
                 
-                eq = st.session_state.get("equipped_ability", "")
-                if "검투사" in eq:
-                    gladiator_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
-                    prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
-                    success_prob = prob_mapping.get(gladiator_stars, 0.75)
-                    
-                    if random.random() < success_prob:
-                        p_dmg_deal *= 2
-                        log_message += f"⚔️ [검투사 효과 발동!] 확률 {int(success_prob*100)}% 성공! 필살기 데미지가 2배(6)로 폭증했습니다!\n"
-                    else:
-                        log_message += f"⚔️ [검투사 효과 실패] 확률 {int(success_prob*100)}% 실패로 기본 데미지만 들어갑니다.\n"
-                elif "힐러" in eq:
-                    raw_name = eq.split("] ")[-1].replace("★", "").strip()
-                    healer_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
-                    
-                    healer_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
-                    healer_success_prob = healer_prob_map.get(healer_stars, 0.800)
-                    heal_amount = 4 if healer_stars >= 5 else 3
-                    
-                    if random.random() < healer_success_prob:
-                        st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
-                        log_message += f"💊 [힐러 효과 발동!] 확률 {int(healer_success_prob*100)}% 성공! 체력이 {heal_amount} 회복되었습니다!\n"
-                    else:
-                        log_message += f"💊 [힐러 효과 실패] 확률 {int(healer_success_prob*100)}% 실패로 회복되지 않았습니다.\n"
-                elif "경찰" in eq:
-                    raw_name = eq.split("] ")[-1].replace("★", "").strip()
-                    cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
-                    
-                    cop_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
-                    cop_success_prob = cop_prob_map.get(cop_stars, 0.800)
-                    ban_count = 2 if cop_stars >= 5 else 1
-                    
-                    if random.random() < cop_success_prob:
-                        all_actions = ["공격", "방어", "치료", "존버", "반격"]
-                        banned = random.sample(all_actions, min(ban_count, len(all_actions)))
-                        st.session_state.banned_actions = banned
-                        log_message += f"🚨 [경찰 효과 발동!] 확률 {int(cop_success_prob*100)}% 성공! 다음 턴 상대의 **{', '.join([f'[{b}]' for b in banned])}** 기술을 밴했습니다!\n"
-                    else:
-                        log_message += f"🚨 [경찰 효과 실패] 확률 {int(cop_success_prob*100)}% 실패로 기술 밴에 실패했습니다.\n"
-                elif "광대" in eq:
-                    if random.random() < 0.6:
-                        p_dmg_deal += 3
-                        log_message += "🤡 [광대 대박!] 60% 확률 성공! 상대 체력이 추가로 3 더 깎였습니다!\n"
-                    else:
-                        st.session_state.player_hp = max(0, st.session_state.player_hp - 2)
-                        log_message += "🤡 [광대 역관광!] 40% 확률로 자폭하여 본인 체력이 2 깎였습니다!\n"
-                    
-            elif player_choice == "공격":
-                if is_player_exhausted:
-                    log_message += "⚠️ 연속 공격으로 지쳐서 공격이 빗나갔습니다!\n"
+                p_dmg_deal = 0
+                ai_dmg_deal = 0
+                
+                if player_choice == "공격":
+                    st.session_state.player_consecutive += 1
+                else:
                     st.session_state.player_consecutive = 0
-                elif ai_choice == "방어":
-                    log_message += "▶ 당신의 공격이 상대의 방어에 막혔습니다!\n"
-                    if st.session_state.player_wait_turns > 0:
-                        st.session_state.player_wait_turns -= 1
-                elif ai_choice == "반격":
-                    log_message += "💥 상대의 반격에 당했습니다!\n"
-                    ai_dmg_deal += base_damage + 1
+                if ai_choice == "공격":
+                    st.session_state.ai_consecutive += 1
                 else:
-                    has_buff = st.session_state.player_wait_turns > 0
-                    p_dmg_deal = base_damage * (2 if has_buff else 1)
-                    log_message += f"▶ 당신의 공격 성공! 상대에게 {p_dmg_deal}의 대미지를 줬습니다."
-                    if has_buff:
-                        log_message += " (존버 버프 사용!)\n"
-                        st.session_state.player_wait_turns = 0
-                    else:
-                        log_message += "\n"
-                        
-            elif player_choice == "치료":
-                if ai_choice == "공격" and not is_ai_exhausted:
-                    log_message += "⚠️ 치료 중 상대에게 공격당해 실패하고 대미지를 입었습니다!\n"
-                else:
-                    if st.session_state.player_hp < st.session_state.max_hp:
-                        st.session_state.player_hp += 1
-                        log_message += "💊 치료 성공! 체력이 1 회복되었습니다.\n"
-                    else:
-                        log_message += "▶ 체력이 이미 가득 차 있습니다.\n"
-                if st.session_state.player_wait_turns > 0:
-                    st.session_state.player_wait_turns -= 1
-                    
-            elif player_choice == "존버":
-                st.session_state.player_wait_turns = 2
-                log_message += "⏳ 존버 상태 돌입!\n"
-                
-            elif player_choice == "방어":
-                log_message += "🛡️ 방어 태세!\n"
-                if st.session_state.player_wait_turns > 0:
-                    st.session_state.player_wait_turns -= 1
-                    
-            elif player_choice == "반격":
-                st.session_state.player_counter_cooldown = 3
-                if ai_choice == "공격" and not is_ai_exhausted:
-                    p_dmg_deal += base_damage + 1
-                    log_message += f"🥊 완벽한 반격 성공! 상대의 공격을 받아쳐 {p_dmg_deal}의 대미지를 돌려줬습니다!\n"
-                else:
-                    log_message += "❌ 반격 실패! 상대가 공격하지 않았습니다.\n"
-
-            # AI 행동
-            if ai_choice == "필살기":
-                st.session_state.ai_ultimate = 0
-                ai_dmg_deal += 3
-                log_message += f"✨ [상대 필살기 작렬!] 당신이 대미지 3을 입었습니다!\n"
-                    
-            elif ai_choice == "공격":
-                if is_ai_exhausted:
-                    log_message += "⚠️ 상대가 지쳐서 공격이 빗나갔습니다!\n"
                     st.session_state.ai_consecutive = 0
+
+                is_player_exhausted = st.session_state.player_consecutive >= 3
+                is_ai_exhausted = st.session_state.ai_consecutive >= 3
+
+                # 플레이어 행동 처리
+                if player_choice == "필살기":
+                    st.session_state.player_ultimate = 0
+                    p_dmg_deal = 3
+                    log_message += "✨ [필살기 작렬!] 기본 대미지 3 부여!\n"
+                    eq = st.session_state.get("equipped_ability", "")
+                    if "검투사" in eq:
+                        gladiator_stars = st.session_state.abilities.get(eq.split("] ")[-1].replace("★", "").strip(), {}).get("stars", 0)
+                        prob_mapping = {0: 0.50, 1: 0.55, 2: 0.60, 3: 0.65, 4: 0.70, 5: 0.75}
+                        success_prob = prob_mapping.get(gladiator_stars, 0.75)
+                        if random.random() < success_prob:
+                            p_dmg_deal *= 2
+                            log_message += f"⚔️ [검투사 발동!] 데미지 2배(6) 폭증!\n"
+                    elif "힐러" in eq:
+                        raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                        healer_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                        healer_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
+                        healer_success_prob = healer_prob_map.get(healer_stars, 0.800)
+                        heal_amount = 4 if healer_stars >= 5 else 3
+                        if random.random() < healer_success_prob:
+                            st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
+                            log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복!\n"
+                    elif "경찰" in eq:
+                        raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                        cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                        cop_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
+                        cop_success_prob = cop_prob_map.get(cop_stars, 0.800)
+                        ban_count = 2 if cop_stars >= 5 else 1
+                        if random.random() < cop_success_prob:
+                            banned = random.sample(["공격", "방어", "치료", "존버", "반격"], min(ban_count, 5))
+                            st.session_state.banned_actions = banned
+                            log_message += f"🚨 [경찰 발동!] 상대 기술 밴!\n"
+                    elif "광대" in eq:
+                        if random.random() < 0.6:
+                            p_dmg_deal += 3
+                            log_message += "🤡 [광대 대박!] 상대 피 추가 -3!\n"
+                        else:
+                            st.session_state.player_hp = max(0, st.session_state.player_hp - 2)
+                            log_message += "🤡 [광대 역관광!] 본인 피 -2!\n"
+
+                elif player_choice == "공격":
+                    if is_player_exhausted:
+                        log_message += "⚠️ 연속 공격으로 지쳐서 빗나감!\n"
+                    elif ai_choice == "방어":
+                        log_message += "▶ 상대 방어에 막힘!\n"
+                    elif ai_choice == "반격":
+                        ai_dmg_deal += base_damage + 1
+                        log_message += "💥 상대 반격에 당함!\n"
+                    else:
+                        has_buff = st.session_state.player_wait_turns > 0
+                        p_dmg_deal = base_damage * (2 if has_buff else 1)
+                        log_message += f"▶ 공격 성공! 상대에게 {p_dmg_deal} 대미지\n"
+                        st.session_state.player_wait_turns = 0
+
+                elif player_choice == "치료":
+                    if ai_choice == "공격" and not is_ai_exhausted:
+                        log_message += "⚠️ 치료 중 공격당해 실패!\n"
+                    else:
+                        st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + 1)
+                        log_message += "💊 치료 성공 (+1)\n"
+
+                elif player_choice == "존버":
+                    st.session_state.player_wait_turns = 2
+                    log_message += "⏳ 존버 돌입!\n"
+
                 elif player_choice == "방어":
-                    log_message += "▶ 상대의 공격을 완벽하게 방어해냈습니다!\n"
-                    if st.session_state.ai_wait_turns > 0:
-                        st.session_state.ai_wait_turns -= 1
+                    log_message += "🛡️ 방어 태세!\n"
+
                 elif player_choice == "반격":
-                    log_message += "▶ 상대의 공격을 반격하여 무효화했습니다!\n"
-                else:
-                    ai_has_buff = st.session_state.ai_wait_turns > 0
-                    ai_dmg_deal += base_damage * (2 if ai_has_buff else 1)
-                    log_message += f"▶ 상대의 공격 명중! 당신이 {ai_dmg_deal}의 대미지를 입었습니다."
-                    if ai_has_buff:
-                        log_message += " (상대 존버 버프 사용!)\n"
-                        st.session_state.ai_wait_turns = 0
-                    else:
-                        log_message += "\n"
-                        
-            elif ai_choice == "치료":
-                if player_choice == "공격" and not is_player_exhausted:
-                    log_message += "⚠️ 상대가 치료 중 공격을 받아 실패했습니다!\n"
-                else:
-                    if st.session_state.ai_hp < st.session_state.max_hp:
-                        st.session_state.ai_hp += 1
-                        log_message += "💊 상대가 치료에 성공해 체력을 1 회복했습니다.\n"
-                    else:
-                        log_message += "▶ 상대의 치료가 실패했습니다.\n"
-                if st.session_state.ai_wait_turns > 0:
-                    st.session_state.ai_wait_turns -= 1
-                    
-            elif ai_choice == "존버":
-                st.session_state.ai_wait_turns = 2
-                log_message += "⏳ 상대가 존버 상태에 돌입했습니다.\n"
-                
-            elif ai_choice == "방어":
-                log_message += "🛡️ 상대가 방어 태세.\n"
-                if st.session_state.ai_wait_turns > 0:
-                    st.session_state.ai_wait_turns -= 1
-                    
-            elif ai_choice == "반격":
-                st.session_state.ai_counter_cooldown = 3
-                if player_choice == "공격" and not is_player_exhausted:
-                    ai_dmg_deal += base_damage + 1
-                    log_message += f"❌ 상대의 반격에 당해 추가 대미지를 입었습니다!\n"
-                else:
-                    log_message += "▶ 상대의 반격이 헛스윙으로 끝났습니다.\n"
+                    st.session_state.player_counter_cooldown = 3
+                    if ai_choice == "공격" and not is_ai_exhausted:
+                        p_dmg_deal += base_damage + 1
+                        log_message += "🥊 완벽한 반격 성공!\n"
 
-            if st.session_state.player_counter_cooldown > 0:
-                st.session_state.player_counter_cooldown -= 1
-            if st.session_state.ai_counter_cooldown > 0:
-                st.session_state.ai_counter_cooldown -= 1
+                # AI 행동 처리
+                if ai_choice == "필살기":
+                    st.session_state.ai_ultimate = 0
+                    ai_dmg_deal += 3
+                    log_message += "✨ [상대 필살기 작렬!]\n"
+                elif ai_choice == "공격":
+                    if not is_ai_exhausted and player_choice != "방어" and player_choice != "반격":
+                        ai_dmg_deal += base_damage
+                elif ai_choice == "치료":
+                    if not (player_choice == "공격" and not is_player_exhausted):
+                        st.session_state.ai_hp = min(st.session_state.max_hp, st.session_state.ai_hp + 1)
 
-            st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg_deal)
-            st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg_deal)
-            
-            st.session_state.turn += 1
+                st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg_deal)
+                st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg_deal)
+                st.session_state.turn += 1
 
-            # 매 5턴마다 필살기가 즉시 사용 가능하도록 게이지를 3으로 채움
-            if st.session_state.turn % 5 == 0:
-                st.session_state.player_ultimate = 3
-                st.session_state.ai_ultimate = 3
-                log_message += "\n⏰ **[시간 경과]** 5턴이 지나 플레이어와 상대의 필살기가 즉시 충전되었습니다!"
+                if st.session_state.turn % 5 == 0:
+                    st.session_state.player_ultimate = 3
+                    st.session_state.ai_ultimate = 3
+                    log_message += "\n⏰ **[시간 경과]** 5턴 경과로 필살기 충전 완료!"
 
-            st.session_state.log = log_message
-            
-            if st.session_state.player_hp == 0 and st.session_state.ai_hp == 0:
-                st.session_state.game_over = True
-                st.session_state.winner = "draw"
-            elif st.session_state.player_hp == 0:
-                st.session_state.game_over = True
-                st.session_state.winner = "ai"
-            elif st.session_state.ai_hp == 0:
-                st.session_state.game_over = True
-                st.session_state.winner = "player"
-                st.session_state.gems += 20
-                
-            st.rerun()
+                st.session_state.log = log_message
+
+                if st.session_state.player_hp == 0 and st.session_state.ai_hp == 0:
+                    st.session_state.game_over = True
+                    st.session_state.winner = "draw"
+                elif st.session_state.player_hp == 0:
+                    st.session_state.game_over = True
+                    st.session_state.winner = "ai"
+                elif st.session_state.ai_hp == 0:
+                    st.session_state.game_over = True
+                    st.session_state.winner = "player"
+                    st.session_state.gems += 20
+                st.rerun()
 
     st.divider()
     st.subheader("📜 이번 턴 기록")
