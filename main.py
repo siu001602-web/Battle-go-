@@ -493,9 +493,8 @@ with tab_char:
     creator_code_input = st.text_input("코드 입력", type="password")
     if st.button("코드 제출"):
         if creator_code_input == "siu0925":
-            st.session_state.gems += 5000
-            st.session_state.guardian_shards += 300
-            st.success("🎉 보석 5,000개 및 수호의 조각 300개 지급!")
+            st.session_state.gems += 10000
+            st.success("🎉 보석 10,000개 지급!")
             st.rerun()
         else:
             st.error("❌ 올바르지 않은 코드입니다.")
@@ -838,7 +837,7 @@ with tab_battle:
                 elif st.session_state.ai_hp == 0:
                     st.session_state.game_over = True
                     st.session_state.winner = "player"
-                    st.session_state.gems += 100  # <--- 이 부분이 20개에서 100개로 변경되었습니다!
+                    st.session_state.gems += 100
                 st.rerun()
 
     st.divider()
