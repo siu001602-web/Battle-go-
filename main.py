@@ -33,7 +33,8 @@ if "initialized" not in st.session_state:
     st.session_state.equipped_ability = None
     st.session_state.banned_actions = []
     
-    # 뽑기 결과 카드 넘기기용 세션 상태
+    # 뽑기 및 천장 시스템 상태 (100연차 천장)
+    st.session_state.pity_counter = 0  # 5성 미획득 카운트
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
@@ -47,6 +48,8 @@ if "initialized" not in st.session_state:
     st.session_state.initialized = True
 
 # 안전 장치
+if "pity_counter" not in st.session_state:
+    st.session_state.pity_counter = 0
 if "game_mode" not in st.session_state:
     st.session_state.game_mode = "AI 배틀"
 if "pvp_rooms" not in st.session_state:
@@ -81,7 +84,7 @@ def reset_game():
     st.session_state.player_consecutive = 0
     st.session_state.ai_consecutive = 0
     st.session_state.player_ultimate = 0
-    st.session_state.ai_ultimate = 0
+    st.session_state.ai_ult = 0
     st.session_state.player_counter_cooldown = 0
     st.session_state.ai_counter_cooldown = 0
     st.session_state.game_over = False
@@ -95,14 +98,27 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
+# 단일 뽑기 로직 (100회 천장 반영)
 def roll_single_item():
-    rand = random.random() * 100
-    if rand < 0.1:
+    st.session_state.pity_counter += 1
+    
+    # 100회 채우면 5성 강제 확정
+    if st.session_state.pity_counter >= 100:
         tier = "5성"
-    elif rand < 5.1:
-        tier = "4성"
+        st.session_state.pity_counter = 0  # 천장 도달 시 초기화
     else:
-        tier = "3성"
+        rand = random.random() * 100
+        if rand < 0.1:
+            tier = "5성"
+        elif rand < 5.1:
+            tier = "4성"
+        else:
+            tier = "3성"
+            
+    # 도중에 5성을 뽑았을 경우 스택 초기화
+    if tier == "5성":
+        st.session_state.pity_counter = 0
+        
     name = random.choice(ABILITIES_POOL[tier])
     
     is_duplicate = False
@@ -154,11 +170,13 @@ tab_battle, tab_gacha, tab_char = st.tabs(["🎮 배틀하기", "✨ 능력 뽑�
 
 with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
-    st.info("""
+    pity_left = 100 - st.session_state.pity_counter
+    st.info(f"""
     **📋 [뽑기 규칙 및 보상 안내]**
     * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라색 배경 카드)
     * 🔹 **3성 (검투사)** : **94.9%** (파란색 배경 카드)
+    * 🔥 **천장 시스템**: 100회 뽑기 동안 5성이 안 나오면 **다음 뽑기에서 5성 확정!** (현재 5성까지 남은 횟수: **{pity_left}회**)
     * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 수호의 조각으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     * 👥 **플레이어 대결(PvP) 승리 시**: 보석 **100개** / 패배 시 **50개** 획득!
@@ -207,7 +225,6 @@ with tab_gacha:
         </div>
         """, unsafe_allow_html=True)
         
-        # 5성 광대가 떴을 때 일러스트 이미지 출력
         if "광대" in name:
             if os.path.exists("1000000779.png"):
                 st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
@@ -254,7 +271,16 @@ with tab_gacha:
                 results = [roll_single_item() for _ in range(10)]
                 has_4star_or_higher = any(item["tier"] in ["4성", "5성"] for item in results)
                 if not has_4star_or_higher:
-                    gt = "5성" if random.random() * 100 < 2 else "4성"
+                    # 10연차 보정 시에도 천장 스택 확인 후 5성 처리
+                    if st.session_state.pity_counter >= 100:
+                        gt = "5성"
+                        st.session_state.pity_counter = 0
+                    else:
+                        gt = "5성" if random.random() * 100 < 2 else "4성"
+                        
+                    if gt == "5성":
+                        st.session_state.pity_counter = 0
+                        
                     g_name = random.choice(ABILITIES_POOL[gt])
                     is_dup = g_name in st.session_state.abilities
                     if is_dup:
@@ -301,12 +327,12 @@ with tab_char:
                     healer_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
                     current_healer_prob = healer_prob_map.get(stars, 80.0)
                     healer_heal_amount = 4 if stars >= 5 else 3
-                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복")
+                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복[span_0](start_span)[span_0](end_span)")
                 elif "경찰" in name:
                     cop_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
                     current_cop_prob = cop_prob_map.get(stars, 80.0)
                     cop_ban_count = 2 if stars >= 5 else 1
-                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴")
+                    st.write(f"🚨 필살기 효과: **{current_cop_prob}%** 확률로 상대 기술 **{cop_ban_count}개** 밴[span_1](start_span)[span_1](end_span)")
                 st.write(f"보유 조각: **{shards}개** / 필요 조각: **1개**")
             with c_col2:
                 if stars < 5:
@@ -508,7 +534,7 @@ with tab_battle:
             st.subheader("행동을 선택하세요")
             banned_list = st.session_state.get("banned_actions", [])
             if banned_list:
-                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다!")
+                st.warning(f"🚨 상대 경찰 능력으로 인해 이번 턴에 **{', '.join([f'[{b}]' for b in banned_list])}** 기술을 사용할 수 없습니다[span_2](start_span)[span_2](end_span)!")
 
             c1, c2, c3, c4, c5, c6 = st.columns(6)
             player_choice = None
@@ -582,7 +608,7 @@ with tab_battle:
                             heal_amount = 4 if healer_stars >= 5 else 3
                             if random.random() < healer_success_prob:
                                 st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
-                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복!\n"
+                                log_message += f"💊 [힐러 발동!] 체력 {heal_amount} 회복[span_3](start_span)[span_3](end_span)!\n"
                         elif "경찰" in eq:
                             raw_name = eq.split("] ")[-1].replace("★", "").strip()
                             cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
@@ -592,7 +618,7 @@ with tab_battle:
                             if random.random() < cop_success_prob:
                                 banned = random.sample(["공격", "방어", "치료", "존버", "반격"], min(ban_count, 5))
                                 st.session_state.banned_actions = banned
-                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴!\n"
+                                log_message += f"🚨 [경찰 발동!] 상대 기술 밴[span_4](start_span)[span_4](end_span)!\n"
                         elif "광대" in eq:
                             if random.random() < 0.6:
                                 p_dmg_deal += 3
