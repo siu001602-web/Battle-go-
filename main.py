@@ -659,6 +659,7 @@ with tab_battle:
             p_ult = st.session_state.get("player_ultimate", 0)
             ai_ult = st.session_state.get("ai_ultimate", 0)
             p_cd = st.session_state.get("player_counter_cooldown", 0)
+            ai_cd = st.session_state.get("ai_counter_cooldown", 0)
 
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -760,7 +761,7 @@ with tab_battle:
                         ai_choice = "기절함"
                         st.session_state.ai_stunned_turns -= 1
                     else:
-                        ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+                        ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, ai_cd)
 
                     base_damage = 2 if st.session_state.turn >= 10 else 1
                     log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
@@ -895,6 +896,17 @@ with tab_battle:
                     elif ai_choice == "치료":
                         if not (player_choice == "공격" and not is_player_exhausted):
                             st.session_state.ai_hp = min(st.session_state.max_hp, st.session_state.ai_hp + 1)
+                    elif ai_choice == "반격":
+                        st.session_state.ai_counter_cooldown = 3
+                        if player_choice == "공격" and not is_player_exhausted:
+                            ai_dmg_deal += base_damage + 1
+                            log_message += "🥊 상대방이 완벽한 반격에 성공했습니다!\n"
+
+                    # 쿨타임 감소 처리
+                    if st.session_state.player_counter_cooldown > 0:
+                        st.session_state.player_counter_cooldown -= 1
+                    if st.session_state.ai_counter_cooldown > 0:
+                        st.session_state.ai_counter_cooldown -= 1
 
                     st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg_deal)
                     st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg_deal)
@@ -1013,6 +1025,7 @@ with tab_battle:
         p_ult = st.session_state.get("player_ultimate", 0)
         ai_ult = st.session_state.get("ai_ultimate", 0)
         p_cd = st.session_state.get("player_counter_cooldown", 0)
+        ai_cd = st.session_state.get("ai_counter_cooldown", 0)
 
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -1115,7 +1128,7 @@ with tab_battle:
                     ai_choice = "기절함"
                     st.session_state.ai_stunned_turns -= 1
                 else:
-                    ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, st.session_state.ai_counter_cooldown)
+                    ai_choice = get_ai_choice(st.session_state.player_history, st.session_state.ai_ultimate, ai_cd)
 
                 base_damage = 2 if st.session_state.turn >= 10 else 1
                 log_message = f"**[결과]** 당신: {player_choice} | 상대: {ai_choice}\n\n"
@@ -1250,6 +1263,17 @@ with tab_battle:
                 elif ai_choice == "치료":
                     if not (player_choice == "공격" and not is_player_exhausted):
                         st.session_state.ai_hp = min(st.session_state.max_hp, st.session_state.ai_hp + 1)
+                elif ai_choice == "반격":
+                    st.session_state.ai_counter_cooldown = 3
+                    if player_choice == "공격" and not is_player_exhausted:
+                        ai_dmg_deal += base_damage + 1
+                        log_message += "🥊 상대방이 완벽한 반격에 성공했습니다!\n"
+
+                # 쿨타임 감소 처리
+                if st.session_state.player_counter_cooldown > 0:
+                    st.session_state.player_counter_cooldown -= 1
+                if st.session_state.ai_counter_cooldown > 0:
+                    st.session_state.ai_counter_cooldown -= 1
 
                 st.session_state.player_hp = max(0, st.session_state.player_hp - ai_dmg_deal)
                 st.session_state.ai_hp = max(0, st.session_state.ai_hp - p_dmg_deal)
