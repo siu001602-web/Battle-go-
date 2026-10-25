@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import json
 import os
 
 # 페이지 설정
@@ -379,24 +380,33 @@ with tab_char:
     st.write("보유한 능력의 조각을 소모하여 별(★)을 5개까지 올릴 수 있습니다.")
     st.divider()
 
-    if st.session_state.get("star5_tickets", 0) > 0:
-        st.markdown(f"### 🎟️ 보유 5성 선택권: **{st.session_state.star5_tickets}개**")
-        chosen_5star = st.selectbox("선택할 5성 능력을 고르세요", ABILITIES_POOL["5성"])
-        if st.button("✨ 5성 선택권 사용하기 (별 1개 증가 / 신규 획득)"):
-            if st.session_state.star5_tickets > 0:
-                st.session_state.star5_tickets -= 1
-                name = chosen_5star
-                tier = "5성"
-                
-                if name in st.session_state.abilities:
-                    st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
-                    st.success(f"🎉 [{name}] 이미 보유 중이므로 승급 조각 1개가 충전되었습니다!")
-                else:
-                    st.session_state.abilities[name] = {"tier": tier, "stars": 0}
-                    st.session_state.ability_shards[name] = 0
-                    st.success(f"🎉 [{name}] 신규 획득 완료!")
-                st.rerun()
-        st.divider()
+    # --- 🎒 내 배낭 (인벤토리) 시스템 ---
+    st.subheader("🎒 내 배낭 (인벤토리)")
+    st.markdown(f"🎟️ **보유 5성 선택권**: **{st.session_state.star5_tickets}개**")
+    
+    if st.session_state.star5_tickets > 0:
+        # 현재 내가 가지고 있는 5성 능력들만 골라냄
+        owned_5stars = [name for name, data in st.session_state.abilities.items() if data["tier"] == "5성"]
+        
+        if owned_5stars:
+            selected_owned_5star = st.selectbox("배낭에서 별을 올릴 보유 5성 능력을 선택하세요", owned_5stars, key="bag_5star_select")
+            if st.button("✨ 선택권 사용하여 별 1개 올리기"):
+                if st.session_state.star5_tickets > 0:
+                    st.session_state.star5_tickets -= 1
+                    if st.session_state.abilities[selected_owned_5star]["stars"] < 5:
+                        st.session_state.abilities[selected_owned_5star]["stars"] += 1
+                        st.success(f"🎉 [{selected_owned_5star}] 성급이 1증가하여 ★({st.session_state.abilities[selected_owned_5star]['stars']})이 되었습니다!")
+                    else:
+                        # 이미 5성 만렙이라면 조각으로 환급 혹은 알림
+                        st.session_state.guardian_shards += 100
+                        st.warning(f"⚠️ [{selected_owned_5star}] 이미 5성 만렙이므로 수호의 조각 100개로 전환되었습니다!")
+                    st.rerun()
+        else:
+            st.info("💡 현재 보유 중인 5성 능력이 없습니다. 5성 능력을 먼저 획득해 보세요!")
+    else:
+        st.caption("보유 중인 5성 선택권이 없습니다. (수호의 조각 상점에서 교환 가능)")
+    
+    st.divider()
 
     if st.session_state.abilities:
         for name, data in list(st.session_state.abilities.items()):
