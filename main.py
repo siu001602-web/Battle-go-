@@ -55,7 +55,7 @@ ABILITIES_POOL = {
         "⚔️ 검투사 (필살기 사용 시 성급별 확률로 데미지 2배)"
     ],
     "4성": [
-        "💊 힐러 (필살기 사용 시 70% 확률로 체력 3 회복)",
+        "💊 힐러 (필살기 사용 시 성급별 확률로 체력 회복)",
         "🚨 경찰 (필살기 사용 시 성급별 확률로 상대 기술 밴)"
     ],
     "5성": [
@@ -287,6 +287,11 @@ with tab_char:
                     prob_map = {0: 50, 1: 55, 2: 60, 3: 65, 4: 70, 5: 75}
                     current_prob = prob_map.get(stars, 75)
                     st.write(f"⚔️ 현재 필살기 2배 확률: **{current_prob}%**")
+                elif "힐러" in name:
+                    healer_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
+                    current_healer_prob = healer_prob_map.get(stars, 80.0)
+                    healer_heal_amount = 4 if stars >= 5 else 3
+                    st.write(f"💊 필살기 효과: **{current_healer_prob}%** 확률로 체력 **{healer_heal_amount}** 회복")
                 elif "경찰" in name:
                     cop_prob_map = {0: 72.5, 1: 75.0, 2: 77.5, 3: 80.0, 4: 80.0, 5: 80.0}
                     current_cop_prob = cop_prob_map.get(stars, 80.0)
@@ -538,11 +543,18 @@ with tab_battle:
                     else:
                         log_message += f"⚔️ [검투사 효과 실패] 확률 {int(success_prob*100)}% 실패로 기본 데미지만 들어갑니다.\n"
                 elif "힐러" in eq:
-                    if random.random() < 0.7:
-                        st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + 3)
-                        log_message += "💊 [힐러 효과 발동!] 70% 확률 성공! 체력이 3 회복되었습니다!\n"
+                    raw_name = eq.split("] ")[-1].replace("★", "").strip()
+                    healer_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
+                    
+                    healer_prob_map = {0: 0.725, 1: 0.750, 2: 0.775, 3: 0.800, 4: 0.800, 5: 0.800}
+                    healer_success_prob = healer_prob_map.get(healer_stars, 0.800)
+                    heal_amount = 4 if healer_stars >= 5 else 3
+                    
+                    if random.random() < healer_success_prob:
+                        st.session_state.player_hp = min(st.session_state.max_hp, st.session_state.player_hp + heal_amount)
+                        log_message += f"💊 [힐러 효과 발동!] 확률 {int(healer_success_prob*100)}% 성공! 체력이 {heal_amount} 회복되었습니다!\n"
                     else:
-                        log_message += "💊 [힐러 효과 실패] 70% 확률 실패로 회복되지 않았습니다.\n"
+                        log_message += f"💊 [힐러 효과 실패] 확률 {int(healer_success_prob*100)}% 실패로 회복되지 않았습니다.\n"
                 elif "경찰" in eq:
                     raw_name = eq.split("] ")[-1].replace("★", "").strip()
                     cop_stars = st.session_state.abilities.get(raw_name, {}).get("stars", 0)
