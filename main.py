@@ -71,7 +71,7 @@ def render_hp(current_hp, max_hp=5):
     black_hearts = "🖤" * (max_hp - current_hp)
     return f"{red_hearts}{black_hearts} ({current_hp}/{max_hp})"
 
-# 단일 뽑기 로직 (만렙 달성 후 중복 시 자동 전환)
+# 단일 뽑기 로직 (만렙 초과 시 백그라운드 자동 전환, 불필요한 텍스트 표기 생략)
 def roll_single_item():
     rand = random.random() * 100
     if rand < 0.1:
@@ -83,28 +83,45 @@ def roll_single_item():
     name = random.choice(ABILITIES_POOL[tier])
     
     is_duplicate = False
-    shard_gained_msg = "(신규 획득)"
     
     if name in st.session_state.abilities:
         is_duplicate = True
         if st.session_state.abilities[name]["stars"] >= 5:
-            if tier == "3성":
-                shard_gained_msg = "3성 만렙 중복"
-            elif tier == "4성":
+            if tier == "4성":
                 st.session_state.guardian_shards += 10
-                shard_gained_msg = "수호의 조각 +10개 자동 전환"
             elif tier == "5성":
                 st.session_state.guardian_shards += 100
-                shard_gained_msg = "수호의 조각 +100개 자동 전환"
         else:
             st.session_state.ability_shards[name] = st.session_state.ability_shards.get(name, 0) + 1
-            shard_gained_msg = f"[{name}] 개별 승급 조각 +1개 획득"
     else:
         st.session_state.abilities[name] = {"tier": tier, "stars": 0}
         if name not in st.session_state.ability_shards:
             st.session_state.ability_shards[name] = 0
             
-    return {"tier": tier, "name": name, "is_duplicate": is_duplicate, "msg": shard_gained_msg}
+    return {"tier": tier, "name": name, "is_duplicate": is_duplicate}
+
+# 화면을 덮는 컷씬 모달 팝업 정의
+@st.dialog("🌟 스페셜 컷씬 발동!", width="large")
+def show_gacha_cutscene(highest_tier, result_summary_text):
+    if highest_tier == "5성":
+        st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 문 & 별 반짝임 컷씬]")
+        try:
+            st.video("1000000778.mp4")
+        except:
+            st.write("황금빛 영상 재생 불가 (파일 경로를 확인해주세요)")
+        st.balloons()
+    elif highest_tier == "4성":
+        st.markdown("### 💜✨ [4성 특급 등장! 보라빛 문 & 별 반짝임 컷씬]")
+        try:
+            st.video("1000000777.mp4")
+        except:
+            st.write("보라빛 영상 재생 불가 (파일 경로를 확인해주세요)")
+            
+    st.divider()
+    st.write(result_summary_text)
+    
+    if st.button("확인 및 닫기"):
+        st.rerun()
 
 # 스마트 AI 선택 로직
 def get_ai_choice(player_history, ai_ultimate, ai_counter_cooldown):
@@ -141,12 +158,10 @@ with tab_gacha:
     st.subheader("✨ 전투 능력 뽑기 시스템")
     st.info("""
     **📋 [뽑기 규칙 및 보상 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (황금빛 문 & 🌟 노란색 별 반짝임 컷씬)
-    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 문 & 💜 보라색 별 반짝임 컷씬)
-    * 🔹 **3성 (검투사)** : **94.9%** (연출 없음 🔹)
-    * 🔄 **중복 획득 시 보상 규칙**:
-      - **만렙(5성) 달성 전**: 개별 승급 조각 `+1개` 획득
-      - **만렙(5성) 달성 후**: 4성은 수호의 조각 `+10개` / 5성은 수호의 조각 `+100개`로 자동 전환됩니다.
+    * 🌟 **5성 (광대)** : **0.1%** (황금빛 화면 덮는 컷씬 팝업)
+    * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라빛 화면 덮는 컷씬 팝업)
+    * 🔹 **3성 (검투사)** : **94.9%** (일반 결과)
+    * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 자동으로 수호의 조각(`4성 +10개`, `5성 +100개`)으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
     *(※ 10연차 시 4성 이상 능력 1개 확정!)*
     """)
@@ -164,29 +179,20 @@ with tab_gacha:
                 st.session_state.gems -= 100
                 res = roll_single_item()
                 
-                if res["tier"] == "5성":
-                    st.markdown("### 🌟✨ [5성 광대 등장! 황금빛 별 반짝임 컷씬 발동!]")
-                    try:
-                        st.video("1000000778.mp4")
-                    except:
-                        st.write("황금빛 영상 재생 불가")
-                    st.balloons()
-                elif res["tier"] == "4성":
-                    st.markdown("### 💜✨ [4성 특급 등장! 보라색 별 반짝임 컷씬 발동!]")
-                    try:
-                        st.video("1000000777.mp4")
-                    except:
-                        st.write("보라빛 영상 재생 불가")
+                tier = res["tier"]
+                name = res["name"]
+                is_dup = res["is_duplicate"]
                 
-                if res["is_duplicate"]:
-                    st.warning(f"🔄 이미 보유한 능력입니다! ({res['msg']})")
+                status_str = "🔄 (보유 중)" if is_dup else "✨ (신규 획득)"
+                summary_text = f"획득 결과: **[{tier}] {name}** {status_str}"
+                
+                if tier in ["4성", "5성"]:
+                    show_gacha_cutscene(tier, summary_text)
                 else:
-                    if res["tier"] == "5성":
-                        st.success(f"🎉 [대박!] 신규 5성 능력 획득: **{res['name']}**")
-                    elif res["tier"] == "4성":
-                        st.info(f"✨ [특급] 신규 4성 능력 획득: **{res['name']}**")
+                    if is_dup:
+                        st.warning(f"🔄 이미 보유 중인 능력입니다: [{tier}] {name}")
                     else:
-                        st.write(f"🔹 [일반] 신규 3성 능력 획득: {res['name']}")
+                        st.success(f"🔹 [일반] 신규 3성 능력 획득: {name}")
             else:
                 st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
                 
@@ -200,30 +206,21 @@ with tab_gacha:
                 if not has_4star_or_higher:
                     gt = "5성" if random.random() * 100 < 2 else "4성"
                     g_name = random.choice(ABILITIES_POOL[gt])
-                    
                     is_dup = g_name in st.session_state.abilities
-                    msg = "(신규 획득)"
                     if is_dup:
                         if st.session_state.abilities[g_name]["stars"] >= 5:
                             if gt == "4성":
                                 st.session_state.guardian_shards += 10
-                                msg = "수호의 조각 +10개 자동 전환"
                             elif gt == "5성":
                                 st.session_state.guardian_shards += 100
-                                msg = "수호의 조각 +100개 자동 전환"
-                            else:
-                                msg = "3성 만렙 중복"
                         else:
                             st.session_state.ability_shards[g_name] = st.session_state.ability_shards.get(g_name, 0) + 1
-                            msg = f"[{g_name}] 개별 승급 조각 +1개 획득"
                     else:
                         st.session_state.abilities[g_name] = {"tier": gt, "stars": 0}
                         if g_name not in st.session_state.ability_shards:
                             st.session_state.ability_shards[g_name] = 0
                             
-                    results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup, "msg": msg}
-                
-                st.success("📦 10연차 뽑기 완료! (4성 이상 1개 확정 포함)")
+                    results[-1] = {"tier": gt, "name": g_name, "is_duplicate": is_dup}
                 
                 highest_tier = "3성"
                 if any(r["tier"] == "5성" for r in results):
@@ -231,23 +228,17 @@ with tab_gacha:
                 elif any(r["tier"] == "4성" for r in results):
                     highest_tier = "4성"
                     
-                if highest_tier == "5성":
-                    st.markdown("### 🌟✨ [10연차 최고 등급: 5성 광대 황금빛 별 컷씬!]")
-                    try:
-                        st.video("1000000778.mp4")
-                    except:
-                        pass
-                    st.balloons()
-                elif highest_tier == "4성":
-                    st.markdown("### 💜✨ [10연차 최고 등급: 4성 특급 보라색 별 컷씬!]")
-                    try:
-                        st.video("1000000777.mp4")
-                    except:
-                        pass
-                
+                summary_lines = []
                 for r in results:
                     prefix = "🔄" if r["is_duplicate"] else "🌟" if r["tier"] in ["4성", "5성"] else "🔹"
-                    st.write(f"{prefix} **[{r['tier']}]** {r['name']} ({r['msg']})")
+                    summary_lines.append(f"{prefix} **[{r['tier']}]** {r['name']}")
+                full_summary = "\n".join(summary_lines)
+                
+                if highest_tier in ["4성", "5성"]:
+                    show_gacha_cutscene(highest_tier, full_summary)
+                else:
+                    st.success("📦 10연차 뽑기 완료!")
+                    st.markdown(full_summary)
             else:
                 st.error("보석이 부족합니다! (배틀 승리로 보석을 모아보세요)")
 
@@ -609,7 +600,7 @@ with tab_battle:
                     log_message += "▶ 상대의 공격을 반격하여 무효화했습니다!\n"
                 else:
                     ai_has_buff = st.session_state.ai_wait_turns > 0
-                    ai_dmg_deal += base_damage * (2 if ai_has_buff else 1)
+                    ai_dmg_deal += base_database * (2 if ai_has_buff else 1) if 'base_database' in locals() else base_damage * (2 if ai_has_buff else 1)
                     log_message += f"▶ 상대의 공격 명중! 당신이 {ai_dmg_deal}의 대미지를 입었습니다."
                     if ai_has_buff:
                         log_message += " (상대 존버 버프 사용!)\n"
