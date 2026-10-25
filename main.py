@@ -38,6 +38,7 @@ if "initialized" not in st.session_state:
     st.session_state.gacha_results = []
     st.session_state.gacha_index = 0
     st.session_state.is_gacha_open = False
+    st.session_state.is_5star_revealed = False  # 5성 카드 오픈 여부
     
     # 멀티플레이(방 시스템) 관련 상태
     st.session_state.game_mode = "AI 배틀"
@@ -50,6 +51,8 @@ if "initialized" not in st.session_state:
 # 안전 장치
 if "pity_counter" not in st.session_state:
     st.session_state.pity_counter = 0
+if "is_5star_revealed" not in st.session_state:
+    st.session_state.is_5star_revealed = False
 if "game_mode" not in st.session_state:
     st.session_state.game_mode = "AI 배틀"
 if "pvp_rooms" not in st.session_state:
@@ -102,10 +105,9 @@ def render_hp(current_hp, max_hp=5):
 def roll_single_item():
     st.session_state.pity_counter += 1
     
-    # 100회 채우면 5성 강제 확정
     if st.session_state.pity_counter >= 100:
         tier = "5성"
-        st.session_state.pity_counter = 0  # 천장 도달 시 초기화
+        st.session_state.pity_counter = 0
     else:
         rand = random.random() * 100
         if rand < 0.1:
@@ -115,7 +117,6 @@ def roll_single_item():
         else:
             tier = "3성"
             
-    # 도중에 5성을 뽑았을 경우 스택 초기화
     if tier == "5성":
         st.session_state.pity_counter = 0
         
@@ -173,13 +174,13 @@ with tab_gacha:
     pity_left = 100 - st.session_state.pity_counter
     st.info(f"""
     **📋 [뽑기 규칙 및 보상 안내]**
-    * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드)
+    * 🌟 **5성 (광대)** : **0.1%** (노란색 배경 카드 / **미스터리 오픈 시스템**)
     * ✨ **4성 (힐러, 경찰)** : **5.0%** (보라색 배경 카드)
     * 🔹 **3성 (검투사)** : **94.9%** (파란색 배경 카드)
-    * 🔥 **천장 시스템**: 100회 뽑기 동안 5성이 안 나오면 **다음 뽑기에서 5성 확정!** (현재 5성까지 남은 횟수: **{pity_left}회**)
+    * 🔥 **천장 시스템**: 100회 뽑기 동안 5성이 안 나오면 다음 뽑기 5성 확정! (남은 횟수: **{pity_left}회**)
     * 🔄 **중복 획득 시 규칙**: 만렙(5성) 달성 이후 초과 조각은 수호의 조각으로 전환됩니다.
     * ⚔️ **AI 배틀 승리 시**: 보석 **20개** 획득!
-    * 👥 **플레이어 대결(PvP) 승리 시**: 보석 **100개** / 패배 시 **50개** 획득!
+    * 👥 **PvP 승리 시**: 보석 **100개** / 패배 시 **50개** 획득!
     """)
     
     col_gem, col_guard = st.columns(2)
@@ -190,7 +191,7 @@ with tab_gacha:
     
     if st.session_state.is_gacha_open:
         st.divider()
-        st.markdown("### 🎴 뽑기 결과 확인 (카드를 넘겨보세요!)")
+        st.markdown("### 🎴 뽑기 결과 확인")
         
         idx = st.session_state.gacha_index
         total = len(st.session_state.gacha_results)
@@ -200,54 +201,72 @@ with tab_gacha:
         name = item["name"]
         is_dup = item["is_duplicate"]
         
-        if tier == "5성":
-            bg_color = "#FFF3CD"
-            border_color = "#FFC107"
-            tier_badge = "🌟 [5성 대박]"
-            st.balloons()
-        elif tier == "4성":
-            bg_color = "#E2D9F3"
-            border_color = "#6F42C1"
-            tier_badge = "✨ [4성 특급]"
-        else:
-            bg_color = "#D1ECF1"
-            border_color = "#17A2B8"
-            tier_badge = "🔹 [3성 일반]"
+        # 5성이고 아직 오픈되지 않았다면 빈 미스터리 화면 표시
+        if tier == "5성" and not st.session_state.is_5star_revealed:
+            st.markdown(f"""
+            <div style="background-color: #222; border: 4px dashed #FFC107; padding: 50px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
+                <h1 style="color: #FFC107; margin: 0;">❓❓❓</h1>
+                <p style="color: #FFF; font-size: 18px; margin-top: 15px;">전설의 기운이 느껴집니다... 카드를 클릭하여 열어보세요!</p>
+                <p style="color: #888; margin-top: 10px;">카드 {idx + 1} / {total}</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-        dup_text = "🔄 (이미 보유 중 - 조각/전환 적용)" if is_dup else "🎉 (신규 획득!)"
-        
-        st.markdown(f"""
-        <div style="background-color: {bg_color}; border: 3px solid {border_color}; padding: 30px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #333; margin: 0;">{tier_badge}</h2>
-            <h1 style="color: #111; margin: 15px 0;">{name}</h1>
-            <p style="font-size: 16px; color: #555; font-weight: bold;">{dup_text}</p>
-            <p style="color: #777; margin-top: 15px;">카드 {idx + 1} / {total}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if "광대" in name:
-            if os.path.exists("1000000779.png"):
-                st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
-            else:
-                st.warning("⚠️ '1000000779.png' 이미지 파일이 main.py와 같은 폴더에 없습니다!")
-        
-        c_prev, c_next, c_close = st.columns(3)
-        with c_prev:
-            if idx > 0:
-                if st.button("◀ 이전 카드"):
-                    st.session_state.gacha_index -= 1
-                    st.rerun()
-        with c_next:
-            if idx < total - 1:
-                if st.button("다음 카드 ▶"):
-                    st.session_state.gacha_index += 1
-                    st.rerun()
-        with c_close:
-            if st.button("❌ 결과창 닫기"):
-                st.session_state.is_gacha_open = False
-                st.session_state.gacha_results = []
-                st.session_state.gacha_index = 0
+            if st.button("✨ 5성 카드 뒤집기 (클릭!)", use_container_width=True):
+                st.session_state.is_5star_revealed = True
                 st.rerun()
+        else:
+            # 일반 카드 또는 오픈된 5성 카드
+            if tier == "5성":
+                bg_color = "#FFF3CD"
+                border_color = "#FFC107"
+                tier_badge = "🌟 [5성 대박]"
+                st.balloons()
+            elif tier == "4성":
+                bg_color = "#E2D9F3"
+                border_color = "#6F42C1"
+                tier_badge = "✨ [4성 특급]"
+            else:
+                bg_color = "#D1ECF1"
+                border_color = "#17A2B8"
+                tier_badge = "🔹 [3성 일반]"
+                
+            dup_text = "🔄 (이미 보유 중 - 조각/전환 적용)" if is_dup else "🎉 (신규 획득!)"
+            
+            st.markdown(f"""
+            <div style="background-color: {bg_color}; border: 3px solid {border_color}; padding: 30px; border-radius: 15px; text-align: center; margin-bottom: 20px;">
+                <h2 style="color: #333; margin: 0;">{tier_badge}</h2>
+                <h1 style="color: #111; margin: 15px 0;">{name}</h1>
+                <p style="font-size: 16px; color: #555; font-weight: bold;">{dup_text}</p>
+                <p style="color: #777; margin-top: 15px;">카드 {idx + 1} / {total}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if "광대" in name:
+                if os.path.exists("1000000779.png"):
+                    st.image("1000000779.png", caption="🎉 전설의 5성 광대 등장!", use_container_width=True)
+                else:
+                    st.warning("⚠️ '1000000779.png' 이미지 파일이 main.py와 같은 폴더에 없습니다!")
+            
+            c_prev, c_next, c_close = st.columns(3)
+            with c_prev:
+                if idx > 0:
+                    if st.button("◀ 이전 카드"):
+                        st.session_state.is_5star_revealed = False  # 이전 카드로 갈 때 초기화
+                        st.session_state.gacha_index -= 1
+                        st.rerun()
+            with c_next:
+                if idx < total - 1:
+                    if st.button("다음 카드 ▶"):
+                        st.session_state.is_5star_revealed = False  # 다음 카드로 갈 때 초기화
+                        st.session_state.gacha_index += 1
+                        st.rerun()
+            with c_close:
+                if st.button("❌ 결과창 닫기"):
+                    st.session_state.is_gacha_open = False
+                    st.session_state.is_5star_revealed = False
+                    st.session_state.gacha_results = []
+                    st.session_state.gacha_index = 0
+                    st.rerun()
                 
         st.divider()
 
@@ -259,6 +278,7 @@ with tab_gacha:
                 res = roll_single_item()
                 st.session_state.gacha_results = [res]
                 st.session_state.gacha_index = 0
+                st.session_state.is_5star_revealed = False
                 st.session_state.is_gacha_open = True
                 st.rerun()
             else:
@@ -271,7 +291,6 @@ with tab_gacha:
                 results = [roll_single_item() for _ in range(10)]
                 has_4star_or_higher = any(item["tier"] in ["4성", "5성"] for item in results)
                 if not has_4star_or_higher:
-                    # 10연차 보정 시에도 천장 스택 확인 후 5성 처리
                     if st.session_state.pity_counter >= 100:
                         gt = "5성"
                         st.session_state.pity_counter = 0
@@ -299,6 +318,7 @@ with tab_gacha:
                 
                 st.session_state.gacha_results = results
                 st.session_state.gacha_index = 0
+                st.session_state.is_5star_revealed = False
                 st.session_state.is_gacha_open = True
                 st.rerun()
             else:
